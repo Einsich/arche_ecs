@@ -1,0 +1,20 @@
+{
+  "tasks": [
+    {
+      "type": "shell",
+      "label": "Build ecs",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "command": "./build.bat",
+      "args": [
+        "${config:launchOption.currentConfig.BuildType.CMAKE_BUILD_TYPE}",
+        "${config:launchOption.currentConfig.BuildType.BUILD_PREFIX}",
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+    },
+  ]
+}

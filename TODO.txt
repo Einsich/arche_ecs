@@ -1,0 +1,11 @@
+========================================
+1) Perf Tests
+2) Archetype layout
+3) Query implementation & caching scetch
+4) TypeDeclaration
+========================================
+1) Type registration
+2) ComponentDeclaration
+3) Archetype creation
+4) Archetype and query/system matching
+5) Entity creation, ComponentInitializer

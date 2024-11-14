@@ -55,8 +55,12 @@ struct Body3 : public IBody
 
 // static_assert(sizeof(Body3) == 48);
 
+int main2();
+
 int main()
 {
+  main2();
+  return 0;
   Timer timer("Main");
   // position
   // position, velocity

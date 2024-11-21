@@ -9,3 +9,7 @@
 3) Archetype creation
 4) Archetype and query/system matching
 5) Entity creation, ComponentInitializer
+========================================
+1) EntityId
+2) Resizable component container
+3) Templates

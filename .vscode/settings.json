@@ -101,6 +101,7 @@
     "span": "cpp",
     "stop_token": "cpp",
     "thread": "cpp",
-    "random": "cpp"
+    "random": "cpp",
+    "numeric": "cpp"
   }
 }

@@ -266,6 +266,24 @@ int main()
       }
     }
   }
+  // test SoA2
+  {
+    std::vector<float3> float3Storage(N1 * 3);
+    float3 *positions = float3Storage.data() + 0;
+    float3 *velocities = float3Storage.data() + N1;
+    const float3 * accelerations = float3Storage.data() + N1 * 2;
+
+    Timer timer("SoA Summary");
+    for (int j = 0 ; j < TEST_COUNT; j++)
+    {
+      // Timer timer("SoA Iteration");
+      for (int i = 0; i < N1; i++)
+      {
+        velocities[i] = accelerations[i] * dt;
+        positions[i] = positions[i] + velocities[i] * dt;
+      }
+    }
+  }
 
   printf("Hello, World!\n");
 }

@@ -9,6 +9,7 @@
 #include <numeric>
 #include <new>
 #include <span>
+#include <array>
 namespace ecs
 {
 
@@ -92,11 +93,15 @@ struct Archetype
 
   ska::flat_hash_map<ComponentId, size_t> componentToCollumnIndex;
 
-  size_t entityCount = 0;
+  uint32_t entityCount = 0;
+  uint32_t chunkSize = 0;
+  uint32_t capacity = 0;
+  uint32_t chunkCount = 0;
 
   Archetype() = default;
   Archetype(const TypeDeclarationMap &type_map, Type &&_type, ArchetypeChunkSize chunk_size_power) : type(std::move(_type))
   {
+    assert(!type.empty());
     archetypeId = get_archetype_id(type);
     collumns.reserve(type.size());
     componentToCollumnIndex.reserve(type.size());
@@ -109,6 +114,7 @@ struct Archetype
       collumn.componentId = componentId;
       componentToCollumnIndex[componentId] = collumns.size() - 1;
     }
+    chunkSize = collumns[0].chunkSize;
   }
 
   int get_component_index(ComponentId componentId) const
@@ -117,17 +123,28 @@ struct Archetype
     return it != componentToCollumnIndex.end() ? it->second : -1;
   }
 
+  void try_add_chunk(int requiredEntityCount)
+  {
+    while (entityCount + requiredEntityCount > capacity)
+    {
+      capacity += chunkSize;
+      chunkCount++;
+      for (Collumn &collumn : collumns)
+      {
+        collumn.add_chunk();
+        assert(capacity == collumn.capacity);
+      }
+    }
+  }
+
   // return index of the added entity
   void add_entity(const TypeDeclarationMap &type_map, const InitializerList &template_init, InitializerList override_list)
   {
+    try_add_chunk(1);
     for (Collumn &collumn : collumns)
     {
 
       const TypeDeclaration *typeDeclaration = type_map.find(collumn.typeId)->second.get();
-      if (entityCount == collumn.capacity)
-      {
-        collumn.add_chunk();
-      }
       // firstly check initialization data in override_list and move it
       auto it = override_list.args.find(collumn.componentId);
       if (it != override_list.args.end())
@@ -153,12 +170,9 @@ struct Archetype
   void add_entities(const TypeDeclarationMap &type_map, const InitializerList &template_init, InitializerSoaList override_soa_list)
   {
     int requiredEntityCount = override_soa_list.size();
+    try_add_chunk(requiredEntityCount);
     for (Collumn &collumn : collumns)
     {
-      while (entityCount + requiredEntityCount > collumn.capacity)
-      {
-        collumn.add_chunk();
-      }
       const TypeDeclaration *typeDeclaration = type_map.find(collumn.typeId)->second.get();
 
       // firstly check initialization data in override_soa_list and move it
@@ -510,71 +524,72 @@ void update(ecs::EntityId eid, float3 &position, const float3 &velocity)
 }
 
 
+void print_name(const std::string &name, float3 position, int *health)
+{
+  printf("print_name [%s] (%f %f %f), %d\n", name.c_str(), position.x, position.y, position.z, health ? *health : -1);
+}
+
 // user_code.cpp.gen
 // #include "user_code.cpp.inl"
 
-void update_loop_codegen(char *eid, char *position, char *velocity, size_t elementCount)
+// user_code.cpp.gen
+// #include "user_code.cpp.inl"
+
+
+template<typename T>
+struct PrtWrapper
+{
+  T *ptr;
+  PrtWrapper(T *ptr) : ptr(ptr) {}
+  PrtWrapper(char *ptr) : ptr((T*)ptr) {}
+  T *operator*() { return ptr; }
+  void operator++() { ptr = ptr ? ptr + 1 : ptr; }
+};
+
+
+template<typename Callable, typename ...NoCRefPtrArgs>
+void perform_system(Callable &&callable_query, size_t elementCount, NoCRefPtrArgs ...components)
 {
   for (size_t i = 0; i < elementCount; i++)
   {
-    update(*(ecs::EntityId *)(eid), *(float3 *)(position), *(const float3 *)(velocity));
-    eid += sizeof(ecs::EntityId);
-    position += sizeof(float3);
-    velocity += sizeof(float3);
+    callable_query(*(components)...);
+    ((++components), ...);
   }
 }
+template<size_t N, typename ...CastArgs, typename Callable, std::size_t... I>
+void templated_archetype_iterate(ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component, Callable &&callable_query, std::index_sequence<I...>)
+{
+  int componenIdx[N] = {to_archetype_component[I]...};
+
+  char **chunks[N] = {
+    (componenIdx[I] >= 0 ? archetype.collumns[componenIdx[I]].chunks.data() : nullptr)...
+  };
+
+  for (uint32_t chunkIdx = 0, chunkCount = archetype.chunkCount; chunkIdx < chunkCount; chunkIdx++)
+  {
+    uint32_t elementCount = std::min(archetype.entityCount - archetype.chunkSize * chunkIdx, archetype.chunkSize);
+    perform_system(std::move(callable_query), elementCount, (CastArgs)(chunks[I] ? chunks[I][chunkIdx] : nullptr)...);
+  }
+}
+
 
 void update_archetype_codegen(ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)
 {
-  ecs::Collumn &eidCollumn = archetype.collumns[to_archetype_component[0]];
-  ecs::Collumn &positionCollumn = archetype.collumns[to_archetype_component[1]];
-  ecs::Collumn &velocityCollumn = archetype.collumns[to_archetype_component[2]];
-  for (uint32_t chunkIdx = 0, chunkCount = eidCollumn.chunks.size(); chunkIdx < chunkCount; chunkIdx++)
-  {
-    uint32_t elementCount = std::min(archetype.entityCount - eidCollumn.chunkSize * chunkIdx, eidCollumn.chunkSize);
-
-    char *eid = eidCollumn.chunks[chunkIdx];
-    char *position = positionCollumn.chunks[chunkIdx];
-    char *velocity = velocityCollumn.chunks[chunkIdx];
-    update_loop_codegen(eid, position, velocity, elementCount);
-  }
-}
-
-
-void print_name(const std::string &name, float3 position)
-{
-  printf("print_name [%s] (%f %f %f)\n", name.c_str(), position.x, position.y, position.z);
-}
-
-
-// user_code.cpp.gen
-// #include "user_code.cpp.inl"
-
-void print_name_loop_codegen(char *name, char *position, size_t elementCount)
-{
-  for (size_t i = 0; i < elementCount; i++)
-  {
-    print_name(*(std::string *)(name), *(float3 *)(position));
-    name += sizeof(std::string);
-    position += sizeof(float3);
-  }
+  const int N = 3;
+  templated_archetype_iterate<N, ecs::EntityId *, float3 *, const float3 *>(archetype, to_archetype_component, update, std::make_index_sequence<N>());
 }
 
 void print_name_archetype_codegen(ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)
 {
-  ecs::Collumn &nameCollumn = archetype.collumns[to_archetype_component[0]];
-  ecs::Collumn &positionCollumn = archetype.collumns[to_archetype_component[1]];
-  for (uint32_t chunkIdx = 0, chunkCount = nameCollumn.chunks.size(); chunkIdx < chunkCount; chunkIdx++)
-  {
-    uint32_t elementCount = std::min(archetype.entityCount - nameCollumn.chunkSize * chunkIdx, nameCollumn.chunkSize);
-
-    char *name = nameCollumn.chunks[chunkIdx];
-    char *position = positionCollumn.chunks[chunkIdx];
-    print_name_loop_codegen(name, position, elementCount);
-  }
+  const int N = 3;
+  templated_archetype_iterate<N, std::string *, float3 *, PrtWrapper<int>>(archetype, to_archetype_component, print_name, std::make_index_sequence<N>());
 }
 
+
 #include "../../timer.h"
+
+template<typename Callable>
+static void print_name(ecs::EcsManager &, Callable &&);
 
 int main2()
 {
@@ -662,6 +677,8 @@ int main2()
     {
       query.try_registrate(archetype);
     }
+    // mgr.queries[query.nameHash] = std::move(query); // TODO: fix this
+    mgr.queries[query.nameHash] = query;
     update_position_query = std::move(query);
   }
   {
@@ -670,7 +687,8 @@ int main2()
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature = {
       {nameId, ecs::Query::ComponentAccess::READ_ONLY},
-      {positionId, ecs::Query::ComponentAccess::READ_COPY}
+      {positionId, ecs::Query::ComponentAccess::READ_COPY},
+      {healthId, ecs::Query::ComponentAccess::READ_ONLY_OPTIONAL},
     };
     query.requireComponents = {};
     query.excludeComponents = {};
@@ -679,7 +697,27 @@ int main2()
     {
       query.try_registrate(archetype);
     }
+    // mgr.queries[query.nameHash] = std::move(query); // TODO: fix this
+    mgr.queries[query.nameHash] = query;
     print_name_query = std::move(query);
+  }
+  {
+    ecs::Query query;
+    query.uniqueName = "print_name_query";
+    query.nameHash = ecs::hash(query.uniqueName.c_str());
+    query.querySignature = {
+      {nameId, ecs::Query::ComponentAccess::READ_ONLY},
+      {healthId, ecs::Query::ComponentAccess::READ_ONLY_OPTIONAL}
+    };
+    query.requireComponents = {};
+    query.excludeComponents = {};
+    query.update_archetype = nullptr;
+
+    for (auto &[id, archetype]  : mgr.archetypeMap)
+    {
+      query.try_registrate(archetype);
+    }
+    mgr.queries[query.nameHash] = std::move(query);
   }
 
   //unfortunately, we can't use initializer_list here, because it doesn't support move semantics
@@ -719,7 +757,7 @@ int main2()
   ecs::TemplateId humanTemplate = template_registration(mgr, "human", movableTemplate,
     {{
       {positionId, float3{2, 0, 0}},
-      {healthId, 50},
+      // {healthId, 50},
       {nameId, std::string("human")}
     }}
   );
@@ -736,7 +774,7 @@ int main2()
   mgr.create_entity(bigBrickTemplate);
 
 
-  if (false)
+  // if (false)
   {
     Timer timer("create_entity"); // (0.066700 ms)
     for (int i = 0; i < 100; i++)
@@ -750,10 +788,11 @@ int main2()
           {nameId, std::string("very_long_node_name") + std::to_string(i)}
         }}
       );
+      UNUSED(eid);
     }
   }
 
-  if (false)
+  // if (false)
   {
     Timer timer("create_entities"); // (0.046000 ms)
     std::vector<float3> positions;
@@ -781,5 +820,37 @@ int main2()
   ecs::update_query(mgr.archetypeMap, update_position_query);
   ecs::update_query(mgr.archetypeMap, print_name_query);
 
+  print_name(mgr, [](const std::string &name, int *health)
+  {
+    printf("print_name [%s] %d\n", name.c_str(), health ? *health : -1);
+  });
+
+
   return 0;
+}
+
+//
+template<typename Callable>
+static void print_name(ecs::EcsManager &mgr, Callable &&query_function)
+{
+  constexpr ecs::NameHash queryHash = ecs::hash("print_name_query");
+  auto it = mgr.queries.find(queryHash);
+  if (it != mgr.queries.end())
+  {
+    ecs::Query &query = it->second;
+
+    for (const auto &archetypeRecord : query.archetypesCache)
+    {
+      auto it = mgr.archetypeMap.find(archetypeRecord.archetypeId);
+      if (it == mgr.archetypeMap.end())
+      {
+        continue;
+      }
+
+      ecs::Archetype &archetype = it->second;
+      const ecs::ToComponentMap &to_archetype_component = archetypeRecord.toComponentIndex;
+      const int N = 2;
+      templated_archetype_iterate<N, std::string *, PrtWrapper<int>>(archetype, to_archetype_component, query_function, std::make_index_sequence<N>());
+    }
+  }
 }

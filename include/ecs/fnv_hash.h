@@ -10,9 +10,9 @@ namespace ecs
 
   constexpr uint32_t fnv_hash(const char *str, uint32_t h)
   {
-    const unsigned char *p = (const unsigned char *)str;
+    const char *p = (const char *)str;
     for (; *p; ++p)
-      h = (h * 16777619u) ^ *p;
+      h = (h * 16777619u) ^ (unsigned char)*p;
     return h;
   }
 

@@ -17,8 +17,8 @@
   },
   "launchOption.currentConfig": {
     "BuildType": {
-      "CMAKE_BUILD_TYPE": "Debug",
-      "BUILD_PREFIX": "dbg"
+      "CMAKE_BUILD_TYPE": "Release",
+      "BUILD_PREFIX": "rel"
     },
     "Test": "test5"
   },

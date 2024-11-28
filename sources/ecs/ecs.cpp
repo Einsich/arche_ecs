@@ -8,11 +8,11 @@
 
 #include <numeric>
 #include <new>
+#include <span>
 namespace ecs
 {
 
 using Type = ska::flat_hash_map<ComponentId, TypeId  /*ComponentId already has TypeId*/>;
-using ComponentList = std::vector<ComponentId>;
 
 ArchetypeId get_archetype_id(const Type &type)
 {
@@ -48,6 +48,7 @@ struct Collumn
   TypeId typeId;
   ArchetypeChunkSize chunkSizePower;
   std::align_val_t containerAlignment;
+  ComponentId componentId;
 
   Collumn(ArchetypeChunkSize chunk_size_power, size_t size_of_element, size_t alignment_of_element, TypeId type_id) :
     capacity(0),
@@ -105,6 +106,7 @@ struct Archetype
       collumns.emplace_back(chunk_size_power, typeDeclaration->sizeOfElement, typeDeclaration->alignmentOfElement, typeId);
       Collumn &collumn = collumns.back();
       collumn.debugName = typeDeclaration->typeName;
+      collumn.componentId = componentId;
       componentToCollumnIndex[componentId] = collumns.size() - 1;
     }
   }
@@ -116,29 +118,82 @@ struct Archetype
   }
 
   // return index of the added entity
-  uint32_t add_entity(const TypeDeclarationMap &type_map, InitializerList init_list)
+  void add_entity(const TypeDeclarationMap &type_map, const InitializerList &template_init, InitializerList override_list)
   {
-    for (ComponentInit &componentInit : init_list.args)
+    for (Collumn &collumn : collumns)
     {
-      auto it = componentToCollumnIndex.find(componentInit.componentId);
-      if (it == componentToCollumnIndex.end())
-      {
-        assert(false);
-        continue;
-      }
-      Collumn &collumn = collumns[it->second];
 
       const TypeDeclaration *typeDeclaration = type_map.find(collumn.typeId)->second.get();
       if (entityCount == collumn.capacity)
       {
         collumn.add_chunk();
       }
-      typeDeclaration->move_construct(collumn.get_data(entityCount), componentInit.data);
+      // firstly check initialization data in override_list and move it
+      auto it = override_list.args.find(collumn.componentId);
+      if (it != override_list.args.end())
+      {
+        typeDeclaration->move_construct(collumn.get_data(entityCount), it->second.data);
+        continue;
+      }
+      // then check initialization data in template_init and copy it
+      auto it2 = template_init.args.find(collumn.componentId);
+      if (it2 != template_init.args.end())
+      {
+        typeDeclaration->copy_construct(collumn.get_data(entityCount), it2->second.data);
+        continue;
+      }
+      // if there is no initialization data, construct default
+      typeDeclaration->construct_default(collumn.get_data(entityCount));
+      // but this is error because we have to have initialization data for all components
+      printf("[ECS] Error: no initialization data for component %s\n", collumn.debugName.c_str());
     }
-    uint32_t entityIndex = entityCount;
     entityCount++;
-    return entityIndex;
   }
+
+  void add_entities(const TypeDeclarationMap &type_map, const InitializerList &template_init, InitializerSoaList override_soa_list)
+  {
+    int requiredEntityCount = override_soa_list.size();
+    for (Collumn &collumn : collumns)
+    {
+      while (entityCount + requiredEntityCount > collumn.capacity)
+      {
+        collumn.add_chunk();
+      }
+      const TypeDeclaration *typeDeclaration = type_map.find(collumn.typeId)->second.get();
+
+      // firstly check initialization data in override_soa_list and move it
+      auto it = override_soa_list.args.find(collumn.componentId);
+      if (it != override_soa_list.args.end())
+      {
+        ComponentDataSoa &componentDataSoa = it->second;
+        for (int i = 0; i < requiredEntityCount; i++)
+        {
+          typeDeclaration->move_construct(collumn.get_data(entityCount + i), componentDataSoa.data[i]);
+        }
+        continue;
+      }
+      // then check initialization data in template_init and copy it
+      auto it2 = template_init.args.find(collumn.componentId);
+      if (it2 != template_init.args.end())
+      {
+        const ComponentData &componentData = it2->second;
+        for (int i = 0; i < requiredEntityCount; i++)
+        {
+          typeDeclaration->copy_construct(collumn.get_data(entityCount + i), componentData.data);
+        }
+        continue;
+      }
+      // if there is no initialization data, construct default
+      for (int i = 0; i < requiredEntityCount; i++)
+      {
+        typeDeclaration->construct_default(collumn.get_data(entityCount + i));
+      }
+      // but this is error because we have to have initialization data for all components
+      printf("[ECS] Error: no initialization data for component %s\n", collumn.debugName.c_str());
+    }
+    entityCount += requiredEntityCount;
+  }
+
 
   void remove_entity(const TypeDeclarationMap &type_map, uint32_t entityIndex)
   {
@@ -235,6 +290,14 @@ struct Query
   void (*update_archetype)(Archetype &archetype, const ToComponentMap &to_archetype_component);
 };
 
+struct Template
+{
+  std::string name;
+  InitializerList args;
+  ArchetypeId archetypeId;
+  std::vector<TemplateId> composition;
+};
+
 struct EcsManager
 {
   TypeDeclarationMap typeMap;
@@ -242,6 +305,7 @@ struct EcsManager
   ska::flat_hash_map<ArchetypeId, Archetype> archetypeMap;
   ska::flat_hash_map<uint32_t, Query> queries;
   EntityContainer entityContainer;
+  ska::flat_hash_map<TemplateId, Template> templates;
 
   ecs::TypeId EntityIdTypeId;
   ecs::ComponentId eidComponentId;
@@ -251,7 +315,8 @@ struct EcsManager
     EntityIdTypeId = ecs::type_registration<ecs::EntityId>(typeMap, "EntityId");
     eidComponentId = ecs::component_registration(componentMap, EntityIdTypeId, "eid");
   }
-  ecs::EntityId create_entity(ArchetypeId archetypeId, InitializerList init_list)
+
+  ecs::EntityId create_entity(ArchetypeId archetypeId, const InitializerList &template_init, InitializerList override_list)
   {
     auto it = archetypeMap.find(archetypeId);
     if (it == archetypeMap.end())
@@ -262,11 +327,57 @@ struct EcsManager
     Archetype &archetype = it->second;
     uint32_t entityIndex = archetype.entityCount;
     ecs::EntityId eid = entityContainer.create_entity(archetypeId, entityIndex);
-    init_list.push_back(ecs::ComponentInit(eidComponentId, ecs::EntityId(eid)));
-    assert(archetype.type.size() == init_list.size());
-    archetype.add_entity(typeMap, std::move(init_list));
-
+    override_list.push_back(ecs::ComponentInit(eidComponentId, ecs::EntityId(eid)));
+    assert(archetype.type.size() == template_init.size());
+    archetype.add_entity(typeMap, template_init, std::move(override_list));
     return eid;
+  }
+  ecs::EntityId create_entity(TemplateId templateId, InitializerList init_list = {})
+  {
+    auto it = templates.find(templateId);
+    if (it == templates.end())
+    {
+      printf("[ECS] Error: Template not found\n");
+      return EntityId();
+    }
+    const Template &templateRecord = it->second;
+    return create_entity(templateRecord.archetypeId, templateRecord.args, std::move(init_list));
+  }
+
+  std::vector<EntityId> create_entities(ArchetypeId archetypeId, const InitializerList &template_init, InitializerSoaList override_soa_list)
+  {
+    auto it = archetypeMap.find(archetypeId);
+    if (it == archetypeMap.end())
+    {
+      printf("Archetype not found\n");
+      return {};
+    }
+    Archetype &archetype = it->second;
+    int requiredEntityCount = override_soa_list.size();
+    std::vector<EntityId> eids(requiredEntityCount);
+    uint32_t entityIndex = archetype.entityCount;
+    for (int i = 0; i < requiredEntityCount; i++)
+    {
+      eids[i] = entityContainer.create_entity(archetypeId, entityIndex + i);
+    }
+
+    // need to create copy to return list of eids
+    override_soa_list.push_back(ecs::ComponentSoaInit(eidComponentId, std::vector<EntityId>(eids)));
+    assert(archetype.type.size() == template_init.size());
+    archetype.add_entities(typeMap, template_init, std::move(override_soa_list));
+    return eids;
+  }
+
+  std::vector<EntityId> create_entities(TemplateId templateId, InitializerSoaList init_soa_list)
+  {
+    auto it = templates.find(templateId);
+    if (it == templates.end())
+    {
+      printf("[ECS] Error: Template not found\n");
+      return {};
+    }
+    const Template &templateRecord = it->second;
+    return create_entities(templateRecord.archetypeId, templateRecord.args, std::move(init_soa_list));
   }
 
   bool destroy_entity(ecs::EntityId eid)
@@ -290,55 +401,15 @@ struct EcsManager
   }
 };
 
-// delete
-ArchetypeId archetype_registration(EcsManager &manager, ComponentList &&components, ArchetypeChunkSize chunk_size_power)
+
+ArchetypeId get_or_create_archetype(EcsManager &manager, const InitializerList &components, ArchetypeChunkSize chunk_size_power)
 {
   Type type;
-  type.reserve(components.size());
-  for (ComponentId componentId : components)
+  type.reserve(components.size() + 1);
+  for (const auto &[componentId, component] : components.args)
   {
     type[componentId] = manager.componentMap.find(componentId)->second->typeId;
   }
-  type[manager.eidComponentId] = manager.EntityIdTypeId;
-
-  ArchetypeId archetypeId = get_archetype_id(type);
-  if (manager.archetypeMap.find(archetypeId) != manager.archetypeMap.end())
-  {
-    printf("Archetype already exists\n");
-    return archetypeId;
-  }
-  manager.archetypeMap[archetypeId] = Archetype(manager.typeMap, std::move(type), chunk_size_power);
-  return archetypeId;
-}
-
-struct Template
-{
-  ArchetypeId archetypeId;
-  InitializerList args;
-  std::string name;
-
-  Template(EcsManager &mgr, const char *_name, InitializerList _args) : name(_name), args(_args)
-  {
-    auto it = mgr.archetypeMap.find(mgr.find_template(name));
-    if (it == mgr.archetypeMap.end())
-    {
-      printf("Template not found\n");
-      return;
-    }
-    archetypeId = it->first;
-
-  }
-};
-
-TemplateId template_registration(EcsManager &manager, const char *_name, InitializerList &&components, ArchetypeChunkSize chunk_size_power)
-{
-  Type type;
-  type.reserve(components.size());
-  for (const ComponentInit &component : components.args)
-  {
-    type[component.componentId] = manager.componentMap.find(component.componentId)->second->typeId;
-  }
-  type[manager.eidComponentId] = manager.EntityIdTypeId;
 
   ArchetypeId archetypeId = get_archetype_id(type);
 
@@ -347,6 +418,66 @@ TemplateId template_registration(EcsManager &manager, const char *_name, Initial
     manager.archetypeMap[archetypeId] = Archetype(manager.typeMap, std::move(type), chunk_size_power);
   }
 
+  return archetypeId;
+}
+
+//1)  A=1
+//2)  A=2 B=2
+//3)  A=3 B=3 C=3
+//4)  A=4 B=4 C=4 D=4
+
+// "X" {1, 2, 3, 4}
+// A=1 B=2 C=3 D=4
+// "Y" {2, 1, 3, 4}
+// A=2 B=2 C=3 D=4
+
+TemplateId template_registration(EcsManager &manager, const char *_name, const std::span<TemplateId> &parent_templates, InitializerList &&components, ArchetypeChunkSize chunk_size_power = ArchetypeChunkSize::Thousands)
+{
+  TemplateId templateId = hash(_name);
+  if (manager.templates.find(templateId) != manager.templates.end())
+  {
+    printf("Template \"%s\" already exists\n", _name);
+    return templateId;
+  }
+  components.push_back(ecs::ComponentInit{manager.eidComponentId, ecs::EntityId()});
+  for (TemplateId parent_template : parent_templates)
+  {
+    auto it = manager.templates.find(parent_template);
+    if (it == manager.templates.end())
+    {
+      printf("Parent template not found\n");
+      return templateId;
+    }
+    const Template &parentTemplate = it->second;
+    for (const auto &[componentId, componentInit] : parentTemplate.args.args)
+    {
+      if (components.args.count(componentId) > 0)
+      {
+        continue;
+      }
+      else
+      {
+        components.push_back({componentId, componentInit.copy()});
+      }
+    }
+  }
+  ArchetypeId archetypeId = get_or_create_archetype(manager, components, chunk_size_power);
+
+  Template templateRecord{std::string(_name), std::move(components), archetypeId, {}};
+
+  manager.templates[templateId] = std::move(templateRecord);
+
+  return templateId;
+}
+
+TemplateId template_registration(EcsManager &manager, const char *_name, InitializerList &&components, ArchetypeChunkSize chunk_size_power = ArchetypeChunkSize::Thousands)
+{
+  return template_registration(manager, _name, {}, std::move(components), chunk_size_power);
+}
+
+TemplateId template_registration(EcsManager &manager, const char *_name, TemplateId parent_template, InitializerList &&components, ArchetypeChunkSize chunk_size_power = ArchetypeChunkSize::Thousands)
+{
+  return template_registration(manager, _name, {&parent_template, 1}, std::move(components), chunk_size_power);
 }
 
 void update_query(ArchetypeMap &archetype_map, const Query &query)
@@ -443,6 +574,8 @@ void print_name_archetype_codegen(ecs::Archetype &archetype, const ecs::ToCompon
   }
 }
 
+#include "../../timer.h"
+
 int main2()
 {
   const bool EntityContainerTest = false;
@@ -482,9 +615,26 @@ int main2()
     printf("[ECS] component: %s, componentId: %x, typeId: %x\n", component->name.c_str(), component->componentId, component->typeId);
   }
 
-  ecs::ArchetypeId archetype1 = archetype_registration(mgr, {positionId, velocityId}, ecs::ArchetypeChunkSize::Medium);
-  ecs::ArchetypeId archetype2 = archetype_registration(mgr, {velocityId, positionId, nameId}, ecs::ArchetypeChunkSize::Medium);
-  ecs::ArchetypeId archetype3 = archetype_registration(mgr, {velocityId, positionId, healthId, nameId}, ecs::ArchetypeChunkSize::Medium);
+  ecs::TemplateId template1 = template_registration(mgr, "point",
+    {{
+      {positionId, float3{}},
+      {velocityId, float3{}}
+    }}, ecs::ArchetypeChunkSize::Medium);
+
+  ecs::TemplateId template2 = template_registration(mgr, "named_point",
+    {{
+      {velocityId, float3{}},
+      {positionId, float3{}},
+      {nameId, std::string{}}
+    }}, ecs::ArchetypeChunkSize::Medium);
+
+  ecs::TemplateId template3 = template_registration(mgr, "named_alive_point",
+    {{
+      {velocityId, float3{}},
+      {positionId, float3{}},
+      {nameId, std::string{}},
+      {healthId, 0}
+    }}, ecs::ArchetypeChunkSize::Medium);
 
   for (const auto &[id, archetype] : mgr.archetypeMap)
   {
@@ -538,11 +688,11 @@ int main2()
   ecs::InitializerList args;
   args.push_back(ecs::ComponentInit{positionId, float3{1, 2, 3}});
   args.push_back(ecs::ComponentInit{velocityId, float3{4, 5, 6}});
-  mgr.create_entity(archetype1, std::move(args));
+  mgr.create_entity(template1, std::move(args));
 
 
   mgr.create_entity(
-    archetype3,
+    template3,
     ecs::InitializerList{
       {
         ecs::ComponentInit{positionId, float3{7, 8, 9}},
@@ -553,57 +703,80 @@ int main2()
     }
   );
 
-  auto movableTemplate = ecs::Template{
-      "movable",
-      ecs::ComponentInit{positionId, float3{0, 0, 0}},
-      ecs::ComponentInit{velocityId, float3{0, 0, 0}}
-  }
-  auto brickTemplate = movableTemplate + ecs::Template{
-    {
-      "brick",
-      ecs::ComponentInit{healthId, 10},
-      ecs::ComponentInit{nameId, std::string("brick")}
-    }
-  }
-  auto humanTemplate = movableTemplate + ecs::Template{
-    {
-      "human",
-      ecs::ComponentInit{healthId, 50},
-      ecs::ComponentInit{nameId, std::string("human")}
-    }
-  }
-  auto bigBrickTemplate = brickTemplate + ecs::Template{
-    {
-      "bigbrick",
-      ecs::ComponentInit{healthId, 100},
-    }
-  }
-  auto templateId = mgr.find_template("movable");
-  ecs::EntityId eid1 = mgr.create_entity(
-    templateId , //"movable" // ,
+  ecs::TemplateId movableTemplate = template_registration(mgr, "movable",
     {{
-      {positionId, float3{13, 14, 15}},
-      {velocityId, float3{16, 17, 18}},
-      {nameId, std::string("entity1")}
+      {positionId, float3{0, 0, 0}},
+      {velocityId, float3{0, 0, 0}}
+    }}
+  );
+  ecs::TemplateId brickTemplate = template_registration(mgr, "brick", movableTemplate,
+    {{
+      {positionId, float3{1, 0, 0}},
+      {healthId, 10},
+      {nameId, std::string("brick")}
+    }}
+  );
+  ecs::TemplateId humanTemplate = template_registration(mgr, "human", movableTemplate,
+    {{
+      {positionId, float3{2, 0, 0}},
+      {healthId, 50},
+      {nameId, std::string("human")}
+    }}
+  );
+  ecs::TemplateId bigBrickTemplate = template_registration(mgr, "bigbrick", brickTemplate,
+    {{
+      {positionId, float3{3, 0, 0}},
+      {healthId, 100}
     }}
   );
 
-  for (int i = 0; i < 100; i++)
+  mgr.create_entity(movableTemplate);
+  mgr.create_entity(brickTemplate);
+  mgr.create_entity(humanTemplate);
+  mgr.create_entity(bigBrickTemplate);
+
+
+  if (false)
   {
-    float f = i;
-    ecs::EntityId eid = mgr.create_entity(
-      archetype2,
-      {{
-        {positionId, float3{f, f, f}},
-        // {velocityId, float3{f, f, f}},
-        {nameId, std::string("very_long_node_name############") + std::to_string(i)}
-      }}
-    );
-    if (i < 15)
-      assert(mgr.destroy_entity(eid));
+    Timer timer("create_entity"); // (0.066700 ms)
+    for (int i = 0; i < 100; i++)
+    {
+      float f = i;
+      ecs::EntityId eid = mgr.create_entity(
+        template2,
+        {{
+          {positionId, float3{f, f, f}},
+          // {velocityId, float3{f, f, f}},
+          {nameId, std::string("very_long_node_name") + std::to_string(i)}
+        }}
+      );
+    }
   }
 
-  assert(mgr.destroy_entity(eid1));
+  if (false)
+  {
+    Timer timer("create_entities"); // (0.046000 ms)
+    std::vector<float3> positions;
+    std::vector<std::string> names;
+    positions.reserve(100);
+    names.reserve(100);
+    for (int i = 0; i < 100; i++)
+    {
+      float f = i;
+      positions.push_back({f, f, f});
+      names.push_back("soa_node" + std::to_string(i));
+    }
+    ecs::InitializerSoaList init;
+    mgr.create_entities(
+      template2,
+      {{
+          {positionId, std::move(positions)},
+          {nameId, std::move(names)}
+      }}
+    );
+  }
+
+  // assert(mgr.destroy_entity(eid1));
 
   ecs::update_query(mgr.archetypeMap, update_position_query);
   ecs::update_query(mgr.archetypeMap, print_name_query);

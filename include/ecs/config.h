@@ -12,5 +12,6 @@ namespace ecs
   using TypeId = uint32_t;
   using NameHash = uint32_t;
   using ArchetypeId = uint32_t;
+  using TemplateId = uint32_t;
 
 }

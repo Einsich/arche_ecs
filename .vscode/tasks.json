@@ -16,5 +16,36 @@
         "isDefault": true
       },
     },
+    {
+      "type": "shell",
+      "label": "Build ecs codegen",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "command": "./build_codegen.bat",
+      "args": [
+        "${config:launchOption.currentConfig.BuildType.CMAKE_BUILD_TYPE}",
+        "${config:launchOption.currentConfig.BuildType.BUILD_PREFIX}",
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+    },
+    {
+      "type": "shell",
+      "label": "Run codegen",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "command": "bin/codegen/${config:launchOption.currentConfig.BuildType.BUILD_PREFIX}/codegen.exe",
+      "args": [
+        "sources/ecs",
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+    },
   ]
 }

@@ -60,13 +60,13 @@ TypeId type_registration(TypeDeclarationMap &type_map, const char *type_name)
   return typeId;
 }
 
-const TypeDeclaration *find(const TypeDeclarationMap &type_map, TypeId type_id)
+inline const TypeDeclaration *find(const TypeDeclarationMap &type_map, TypeId type_id)
 {
   const auto it = type_map.find(type_id);
   return it != type_map.end() ? it->second.get() : nullptr;
 }
 
-const TypeDeclaration *find(const TypeDeclarationMap &type_map, const char *type_name)
+inline const TypeDeclaration *find(const TypeDeclarationMap &type_map, const char *type_name)
 {
   const auto it = type_map.find(hash(type_name));
   return it != type_map.end() ? it->second.get() : nullptr;

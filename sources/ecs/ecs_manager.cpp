@@ -41,7 +41,7 @@ TemplateId template_registration(
       }
     }
   }
-  ArchetypeId archetypeId = get_or_create_archetype(mgr, components, chunk_size_power);
+  ArchetypeId archetypeId = get_or_create_archetype(mgr, components, chunk_size_power, _name);
 
   Template templateRecord{std::string(_name), std::move(components), archetypeId, {}};
 

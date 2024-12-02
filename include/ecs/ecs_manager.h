@@ -47,7 +47,8 @@ struct EcsManager
     uint32_t entityIndex = archetype.entityCount;
     ecs::EntityId eid = entityContainer.create_entity(archetypeId, entityIndex);
     override_list.push_back(ecs::ComponentInit(eidComponentId, ecs::EntityId(eid)));
-    assert(archetype.type.size() == template_init.size());
+    // can be not equal if template has unregistered components. Not terrible, but not good. In this case, we should skip them
+    assert(archetype.type.size() <= template_init.size());
     archetype.add_entity(typeMap, template_init, std::move(override_list));
     return eid;
   }

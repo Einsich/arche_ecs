@@ -97,8 +97,8 @@ int main2()
   // _CONSTEXPR20 vector(initializer_list<_Ty> _Ilist, const _Alloc& _Al = _Alloc())
 
   ecs::InitializerList args;
-  args.push_back(ecs::ComponentInit{positionId, float3{1, 2, 3}});
-  args.push_back(ecs::ComponentInit{velocityId, float3{4, 5, 6}});
+  args.push_back(ecs::ComponentInit{"position", float3{1, 2, 3}});
+  args.push_back(ecs::ComponentInit{"velocity", float3{4, 5, 6}});
   mgr.create_entity(template1, std::move(args));
 
 
@@ -106,10 +106,10 @@ int main2()
     template3,
     ecs::InitializerList{
       {
-        ecs::ComponentInit{positionId, float3{7, 8, 9}},
-        ecs::ComponentInit{velocityId, float3{10, 11, 12}},
-        ecs::ComponentInit{healthId, 100},
-        ecs::ComponentInit{nameId, std::string("entity1")}
+        ecs::ComponentInit{"position", float3{7, 8, 9}},
+        ecs::ComponentInit{"velocity", float3{10, 11, 12}},
+        ecs::ComponentInit{"health", 100},
+        ecs::ComponentInit{"name", std::string("entity1")}
       }
     }
   );
@@ -156,9 +156,9 @@ int main2()
       ecs::EntityId eid = mgr.create_entity(
         template2,
         {{
-          {positionId, float3{f, f, f}},
+          {"position", float3{f, f, f}},
           // {velocityId, float3{f, f, f}},
-          {nameId, std::string("very_long_node_name") + std::to_string(i)}
+          {"name", std::string("very_long_node_name") + std::to_string(i)}
         }}
       );
       UNUSED(eid);
@@ -182,8 +182,8 @@ int main2()
     mgr.create_entities(
       template2,
       {{
-          {positionId, std::move(positions)},
-          {nameId, std::move(names)}
+          {"position", std::move(positions)},
+          {"name", std::move(names)}
       }}
     );
   }

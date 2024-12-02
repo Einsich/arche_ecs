@@ -53,7 +53,7 @@ struct Archetype
 
 using ArchetypeMap = ska::flat_hash_map<ArchetypeId, Archetype>;
 
-ArchetypeId get_or_create_archetype(EcsManager &mgr, const InitializerList &components, ArchetypeChunkSize chunk_size_power);
+ArchetypeId get_or_create_archetype(EcsManager &mgr, const InitializerList &components, ArchetypeChunkSize chunk_size_power, const char *template_name);
 
 // } // namespace details
 

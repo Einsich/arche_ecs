@@ -119,6 +119,10 @@ namespace ecs
     template<typename T>
     ComponentInit(ComponentId component_id, T &&_data) : ComponentData(std::forward<T>(_data)), componentId(component_id) {}
 
+    template<typename T>
+    ComponentInit(const char *component_name, T &&_data) :
+        ComponentData(std::forward<T>(_data)), componentId(get_component_id(ecs::TypeInfo<T>::typeId, component_name)) {}
+
 
     ComponentInit(ComponentInit &&other) : ComponentData(static_cast<ComponentData&&>(std::move(other))), componentId(other.componentId)
     {
@@ -137,6 +141,9 @@ namespace ecs
     template<typename T>
     ComponentSoaInit(ComponentId component_id, std::vector<T> &&_data) : ComponentDataSoa(std::move(_data)), componentId(component_id) {}
 
+    template<typename T>
+    ComponentSoaInit(const char *component_name, std::vector<T> &&_data) :
+        ComponentDataSoa(std::move(_data)), componentId(get_component_id(ecs::TypeInfo<T>::typeId, component_name)) {}
 
     ComponentSoaInit(ComponentSoaInit &&other) : ComponentDataSoa(std::move(other)), componentId(other.componentId)
     {

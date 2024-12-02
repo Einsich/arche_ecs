@@ -138,13 +138,22 @@ void Archetype::remove_entity(const TypeDeclarationMap &type_map, uint32_t entit
 }
 
 
-ArchetypeId get_or_create_archetype(EcsManager &mgr, const InitializerList &components, ArchetypeChunkSize chunk_size_power)
+ArchetypeId get_or_create_archetype(EcsManager &mgr, const InitializerList &components, ArchetypeChunkSize chunk_size_power, const char *template_name)
 {
   Type type;
   type.reserve(components.size() + 1);
   for (const auto &[componentId, component] : components.args)
   {
-    type[componentId] = mgr.componentMap.find(componentId)->second->typeId;
+    auto it = mgr.componentMap.find(componentId);
+    if (it != mgr.componentMap.end())
+    {
+      type[componentId] = it->second->typeId;
+    }
+    else
+    {
+      printf("[ECS] Error: Component %x not found, during instantiation template \"%s\"\n", componentId, template_name);
+      continue;
+    }
   }
 
   ArchetypeId archetypeId = get_archetype_id(type);

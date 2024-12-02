@@ -11,6 +11,7 @@
 #include <assert.h>
 #include <span>
 
+ECS_TYPE_DECLARATION_ALIAS(ecs::EntityId, "EntityId")
 namespace ecs
 {
 using TemplatesMap = ska::flat_hash_map<TemplateId, Template>;
@@ -20,7 +21,8 @@ struct EcsManager
   TypeDeclarationMap typeMap;
   ComponentDeclarationMap componentMap;
   ska::flat_hash_map<ArchetypeId, Archetype> archetypeMap;
-  ska::flat_hash_map<uint32_t, Query> queries;
+  ska::flat_hash_map<NameHash, Query> queries;
+  ska::flat_hash_map<NameHash, System> systems;
   EntityContainer entityContainer;
   TemplatesMap templates;
 
@@ -29,8 +31,8 @@ struct EcsManager
 
   EcsManager()
   {
-    EntityIdTypeId = ecs::type_registration<ecs::EntityId>(typeMap, "EntityId");
-    eidComponentId = ecs::component_registration(componentMap, EntityIdTypeId, "eid");
+    EntityIdTypeId = ecs::type_registration<ecs::EntityId>(typeMap);
+    eidComponentId = ecs::get_or_add_component(componentMap, EntityIdTypeId, "eid");
   }
 
   ecs::EntityId create_entity(ArchetypeId archetypeId, const InitializerList &template_init, InitializerList override_list)
@@ -118,10 +120,7 @@ struct EcsManager
   }
 };
 TemplateId template_registration(
-  const ComponentDeclarationMap &component_map,
-  const TypeDeclarationMap &type_map,
-  ArchetypeMap &archetype_map,
-  TemplatesMap &templates,
+  EcsManager &manager,
   ComponentId eid_component_id,
   const char *_name,
   const std::span<TemplateId> &parent_templates,
@@ -131,25 +130,56 @@ TemplateId template_registration(
 
 inline TemplateId template_registration(EcsManager &manager, const char *_name, InitializerList &&components, ArchetypeChunkSize chunk_size_power = ArchetypeChunkSize::Thousands)
 {
-  return template_registration(manager.componentMap, manager.typeMap, manager.archetypeMap, manager.templates, manager.eidComponentId, _name, {}, std::move(components), chunk_size_power);
+  return template_registration(manager, manager.eidComponentId, _name, {}, std::move(components), chunk_size_power);
 }
 
 inline TemplateId template_registration(EcsManager &manager, const char *_name, TemplateId parent_template, InitializerList &&components, ArchetypeChunkSize chunk_size_power = ArchetypeChunkSize::Thousands)
 {
-  return template_registration(manager.componentMap, manager.typeMap, manager.archetypeMap, manager.templates, manager.eidComponentId, _name, {&parent_template, 1}, std::move(components), chunk_size_power);
+  return template_registration(manager, manager.eidComponentId, _name, {&parent_template, 1}, std::move(components), chunk_size_power);
 }
 
-inline void update_query(ArchetypeMap &archetype_map, const Query &query)
+inline void perform_system(ArchetypeMap &archetype_map, const System &system)
 {
-  for (const auto &archetypeRecord : query.archetypesCache)
+  for (const auto &archetypeRecord : system.archetypesCache)
   {
     auto it = archetype_map.find(archetypeRecord.archetypeId);
     if (it == archetype_map.end())
     {
       continue;
     }
-    query.update_archetype(it->second, archetypeRecord.toComponentIndex);
+    system.update_archetype(it->second, archetypeRecord.toComponentIndex);
   }
+}
+
+inline void register_query(EcsManager &mgr, Query &&query)
+{
+  for (const auto &[id, archetype] : mgr.archetypeMap)
+  {
+    query.try_registrate(archetype);
+  }
+  mgr.queries[query.nameHash] = std::move(query);
+}
+
+inline void register_system(EcsManager &mgr, System &&system)
+{
+  for (const auto &[id, archetype] : mgr.archetypeMap)
+  {
+    system.try_registrate(archetype);
+  }
+  mgr.systems[system.nameHash] = std::move(system);
+}
+
+inline void register_archetype(EcsManager &mgr, Archetype &&archetype)
+{
+  for (auto &[id, query] : mgr.queries)
+  {
+    query.try_registrate(archetype);
+  }
+  for (auto &[id, query] : mgr.systems)
+  {
+    query.try_registrate(archetype);
+  }
+  mgr.archetypeMap[archetype.archetypeId] = std::move(archetype);
 }
 
 } // namespace ecs

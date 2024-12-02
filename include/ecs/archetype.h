@@ -9,6 +9,7 @@
 namespace ecs
 {
 
+struct EcsManager;
 // namespace details
 // {
 
@@ -31,7 +32,7 @@ struct Archetype
   uint32_t chunkCount = 0;
 
   Archetype() = default;
-  Archetype(const TypeDeclarationMap &type_map, Type &&_type, ArchetypeChunkSize chunk_size_power);
+  Archetype(const TypeDeclarationMap &type_map, ArchetypeId archetype_id, Type &&_type, ArchetypeChunkSize chunk_size_power);
 
   int get_component_index(ComponentId componentId) const
   {
@@ -52,7 +53,7 @@ struct Archetype
 
 using ArchetypeMap = ska::flat_hash_map<ArchetypeId, Archetype>;
 
-ArchetypeId get_or_create_archetype(const ComponentDeclarationMap &component_map, const TypeDeclarationMap &type_map, ArchetypeMap &archetype_map, const InitializerList &components, ArchetypeChunkSize chunk_size_power);
+ArchetypeId get_or_create_archetype(EcsManager &mgr, const InitializerList &components, ArchetypeChunkSize chunk_size_power);
 
 // } // namespace details
 

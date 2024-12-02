@@ -75,6 +75,11 @@ struct Query
   }
 
   std::vector<ArchetypeRecord> archetypesCache;
+};
+
+struct System final : public Query
+{
   void (*update_archetype)(Archetype &archetype, const ToComponentMap &to_archetype_component);
 };
+
 }

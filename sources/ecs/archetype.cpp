@@ -1,4 +1,5 @@
 #include "ecs/archetype.h"
+#include "ecs/ecs_manager.h"
 #include <assert.h>
 
 
@@ -18,15 +19,15 @@ ArchetypeId get_archetype_id(const Type &type)
   return id;
 }
 
-Archetype::Archetype(const TypeDeclarationMap &type_map, Type &&_type, ArchetypeChunkSize chunk_size_power) : type(std::move(_type))
+Archetype::Archetype(const TypeDeclarationMap &type_map, ArchetypeId archetype_id, Type &&_type, ArchetypeChunkSize chunk_size_power) :
+  type(std::move(_type)), archetypeId(archetype_id)
 {
   assert(!type.empty());
-  archetypeId = get_archetype_id(type);
   collumns.reserve(type.size());
   componentToCollumnIndex.reserve(type.size());
   for (auto [componentId, typeId] : type)
   {
-    const TypeDeclaration *typeDeclaration = type_map.find(typeId)->second.get();
+    const TypeDeclaration *typeDeclaration = find(type_map, typeId);
     collumns.emplace_back(chunk_size_power, typeDeclaration->sizeOfElement, typeDeclaration->alignmentOfElement, typeId);
     Collumn &collumn = collumns.back();
     collumn.debugName = typeDeclaration->typeName;
@@ -56,7 +57,7 @@ void Archetype::add_entity(const TypeDeclarationMap &type_map, const Initializer
   for (Collumn &collumn : collumns)
   {
 
-    const TypeDeclaration *typeDeclaration = type_map.find(collumn.typeId)->second.get();
+    const TypeDeclaration *typeDeclaration = find(type_map, collumn.typeId);
     // firstly check initialization data in override_list and move it
     auto it = override_list.args.find(collumn.componentId);
     if (it != override_list.args.end())
@@ -85,7 +86,7 @@ void Archetype::add_entities(const TypeDeclarationMap &type_map, const Initializ
   try_add_chunk(requiredEntityCount);
   for (Collumn &collumn : collumns)
   {
-    const TypeDeclaration *typeDeclaration = type_map.find(collumn.typeId)->second.get();
+    const TypeDeclaration *typeDeclaration = find(type_map, collumn.typeId);
 
     // firstly check initialization data in override_soa_list and move it
     auto it = override_soa_list.args.find(collumn.componentId);
@@ -124,7 +125,7 @@ void Archetype::remove_entity(const TypeDeclarationMap &type_map, uint32_t entit
 {
   for (Collumn &collumn : collumns)
   {
-    const TypeDeclaration *typeDeclaration = type_map.find(collumn.typeId)->second.get();
+    const TypeDeclaration *typeDeclaration = find(type_map, collumn.typeId);
     void *removedEntityComponentPtr = collumn.get_data(entityIndex);
     typeDeclaration->destruct(removedEntityComponentPtr);
     if (entityIndex != entityCount - 1)
@@ -137,20 +138,20 @@ void Archetype::remove_entity(const TypeDeclarationMap &type_map, uint32_t entit
 }
 
 
-ArchetypeId get_or_create_archetype(const ComponentDeclarationMap &component_map, const TypeDeclarationMap &type_map, ArchetypeMap &archetype_map, const InitializerList &components, ArchetypeChunkSize chunk_size_power)
+ArchetypeId get_or_create_archetype(EcsManager &mgr, const InitializerList &components, ArchetypeChunkSize chunk_size_power)
 {
   Type type;
   type.reserve(components.size() + 1);
   for (const auto &[componentId, component] : components.args)
   {
-    type[componentId] = component_map.find(componentId)->second->typeId;
+    type[componentId] = mgr.componentMap.find(componentId)->second->typeId;
   }
 
   ArchetypeId archetypeId = get_archetype_id(type);
 
-  if (archetype_map.find(archetypeId) == archetype_map.end())
+  if (mgr.archetypeMap.find(archetypeId) == mgr.archetypeMap.end())
   {
-    archetype_map[archetypeId] = Archetype(type_map, std::move(type), chunk_size_power);
+    register_archetype(mgr, Archetype(mgr.typeMap, archetypeId, std::move(type), chunk_size_power));
   }
 
   return archetypeId;

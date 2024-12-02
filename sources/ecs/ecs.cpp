@@ -2,54 +2,27 @@
 #include "ecs/config.h"
 #include "ecs/query_iteration.h"
 #include "ecs/ecs_manager.h"
+#include "ecs/codegen_attributes.h"
 #include <assert.h>
 
-
-#define STRINGIZE(x) STRINGIZE2(x)
-#define STRINGIZE2(x) #x
-#define LINE_STRING STRINGIZE(__LINE__)
 
 #define UNUSED(x) (void)(x)
 
 #include "../../math_helper.h"
 
-// user_code.cpp.inl
-
-void update(ecs::EntityId eid, float3 &position, const float3 &velocity)
-{
-  printf("update [%d/%d] (%f %f %f), (%f %f %f)\n", eid.entityIndex, eid.generation, position.x, position.y, position.z, velocity.x, velocity.y, velocity.z);
-}
-
-
-void print_name(const std::string &name, float3 position, int *health)
-{
-  printf("print_name [%s] (%f %f %f), %d\n", name.c_str(), position.x, position.y, position.z, health ? *health : -1);
-}
-
-// user_code.cpp.gen
-// #include "user_code.cpp.inl"
-
-// user_code.cpp.gen
-// #include "user_code.cpp.inl"
-
-
-void update_archetype_codegen(ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)
-{
-  const int N = 3;
-  ecs::templated_archetype_iterate<N, ecs::EntityId *, float3 *, const float3 *>(archetype, to_archetype_component, update, std::make_index_sequence<N>());
-}
-
-void print_name_archetype_codegen(ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)
-{
-  const int N = 3;
-  ecs::templated_archetype_iterate<N, std::string *, float3 *, ecs::PrtWrapper<int>>(archetype, to_archetype_component, print_name, std::make_index_sequence<N>());
-}
-
 
 #include "../../timer.h"
 
-template<typename Callable>
-static void print_name(ecs::EcsManager &, Callable &&);
+void query_test(ecs::EcsManager &mgr);
+
+ECS_TYPE_DECLARATION(int)
+ECS_TYPE_DECLARATION(float3)
+ECS_TYPE_DECLARATION_ALIAS(std::string, "string")
+
+ECS_TYPE_REGISTRATION(ecs::EntityId)
+ECS_TYPE_REGISTRATION(int)
+ECS_TYPE_REGISTRATION(float3)
+ECS_TYPE_REGISTRATION(std::string)
 
 int main2()
 {
@@ -71,19 +44,20 @@ int main2()
   }
   ecs::EcsManager mgr;
 
-  ecs::TypeId float3Id = ecs::type_registration<float3>(mgr.typeMap, "float3");
-  ecs::TypeId intId = ecs::type_registration<int>(mgr.typeMap, "int");
-  ecs::TypeId stringId = ecs::type_registration<std::string>(mgr.typeMap, "string");
+  ecs::TypeDeclarationInfo::iterate_all([&](const ecs::TypeDeclaration &type_declaration) {
+    mgr.typeMap[type_declaration.typeId] = type_declaration;
+  });
+
 
   for (const auto &[id, type] : mgr.typeMap)
   {
-    printf("[ECS] type: %s, typeId: %x\n", type->typeName.c_str(), type->typeId);
+    printf("[ECS] type: %s, typeId: %x\n", type.typeName.c_str(), type.typeId);
   }
 
-  ecs::ComponentId positionId = ecs::component_registration(mgr.componentMap, ecs::hash("float3")/* float3Id */, "position");
-  ecs::ComponentId velocityId = ecs::component_registration(mgr.componentMap, float3Id, "velocity");
-  ecs::ComponentId healthId = ecs::component_registration(mgr.componentMap, intId, "health");
-  ecs::ComponentId nameId = ecs::component_registration(mgr.componentMap, stringId, "name");
+  ecs::ComponentId positionId = ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<float3>::typeId, "position");
+  ecs::ComponentId velocityId = ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<float3>::typeId, "velocity");
+  ecs::ComponentId healthId = ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<int>::typeId, "health");
+  ecs::ComponentId nameId = ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<std::string>::typeId, "name");
 
   for (const auto &[id, component] : mgr.componentMap)
   {
@@ -116,69 +90,8 @@ int main2()
     printf("[ECS] archetype: %x, components: %zu\n", archetype.archetypeId, archetype.collumns.size());
   }
 
+  ecs::CodegenFileRegistration::register_all_codegen_files(mgr);
 
-  ecs::Query update_position_query;
-  ecs::Query print_name_query;
-
-  {
-    ecs::Query query;
-    query.uniqueName = __FILE__ LINE_STRING "update_position";
-    query.nameHash = ecs::hash(query.uniqueName.c_str());
-    query.querySignature = {
-      {mgr.eidComponentId, ecs::Query::ComponentAccess::READ_COPY},
-      {positionId, ecs::Query::ComponentAccess::READ_WRITE},
-      {velocityId, ecs::Query::ComponentAccess::READ_ONLY}
-    };
-    query.requireComponents = {};
-    query.excludeComponents = {healthId};
-    query.update_archetype = update_archetype_codegen;
-
-    for (auto &[id, archetype]  : mgr.archetypeMap)
-    {
-      query.try_registrate(archetype);
-    }
-    // mgr.queries[query.nameHash] = std::move(query); // TODO: fix this
-    mgr.queries[query.nameHash] = query;
-    update_position_query = std::move(query);
-  }
-  {
-    ecs::Query query;
-    query.uniqueName = __FILE__ LINE_STRING "print_name";
-    query.nameHash = ecs::hash(query.uniqueName.c_str());
-    query.querySignature = {
-      {nameId, ecs::Query::ComponentAccess::READ_ONLY},
-      {positionId, ecs::Query::ComponentAccess::READ_COPY},
-      {healthId, ecs::Query::ComponentAccess::READ_ONLY_OPTIONAL},
-    };
-    query.requireComponents = {};
-    query.excludeComponents = {};
-    query.update_archetype = print_name_archetype_codegen;
-    for (auto &[id, archetype]  : mgr.archetypeMap)
-    {
-      query.try_registrate(archetype);
-    }
-    // mgr.queries[query.nameHash] = std::move(query); // TODO: fix this
-    mgr.queries[query.nameHash] = query;
-    print_name_query = std::move(query);
-  }
-  {
-    ecs::Query query;
-    query.uniqueName = "print_name_query";
-    query.nameHash = ecs::hash(query.uniqueName.c_str());
-    query.querySignature = {
-      {nameId, ecs::Query::ComponentAccess::READ_ONLY},
-      {healthId, ecs::Query::ComponentAccess::READ_ONLY_OPTIONAL}
-    };
-    query.requireComponents = {};
-    query.excludeComponents = {};
-    query.update_archetype = nullptr;
-
-    for (auto &[id, archetype]  : mgr.archetypeMap)
-    {
-      query.try_registrate(archetype);
-    }
-    mgr.queries[query.nameHash] = std::move(query);
-  }
 
   //unfortunately, we can't use initializer_list here, because it doesn't support move semantics
   // _CONSTEXPR20 vector(initializer_list<_Ty> _Ilist, const _Alloc& _Al = _Alloc())
@@ -277,25 +190,12 @@ int main2()
 
   // assert(mgr.destroy_entity(eid1));
 
-  ecs::update_query(mgr.archetypeMap, update_position_query);
-  ecs::update_query(mgr.archetypeMap, print_name_query);
-
-  print_name(mgr, [](const std::string &name, int *health)
+  for (auto &[hashId, system] : mgr.systems)
   {
-    printf("print_name [%s] %d\n", name.c_str(), health ? *health : -1);
-  });
+    ecs::perform_system(mgr.archetypeMap, system);
+  }
+  query_test(mgr);
 
 
   return 0;
-}
-
-template<typename Callable>
-static void print_name(ecs::EcsManager &mgr, Callable &&query_function)
-{
-  constexpr ecs::NameHash queryHash = ecs::hash("print_name_query");
-  ecs::call_query(mgr, queryHash, [&](ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)
-  {
-    const int N = 2;
-    ecs::templated_archetype_iterate<N, std::string *, ecs::PrtWrapper<int>>(archetype, to_archetype_component, std::move(query_function), std::make_index_sequence<N>());
-  });
 }

@@ -41,6 +41,7 @@
       "command": "bin/codegen/${config:launchOption.currentConfig.BuildType.BUILD_PREFIX}/codegen.exe",
       "args": [
         "sources/ecs",
+        "-force_rebuild"
       ],
       "group": {
         "kind": "build",

@@ -28,9 +28,14 @@ inline constexpr ComponentId get_component_id(const char *type_name, const char 
 
 using ComponentDeclarationMap = ska::flat_hash_map<ComponentId, std::unique_ptr<ComponentDeclaration>>;
 
-inline ComponentId component_registration(ComponentDeclarationMap &component_map, TypeId typeId, const char *component_name)
+inline ComponentId get_or_add_component(ComponentDeclarationMap &component_map, TypeId typeId, const char *component_name)
 {
   ComponentId componentId = get_component_id(typeId, component_name);
+  auto it = component_map.find(componentId);
+  if (it != component_map.end())
+  {
+    return componentId;
+  }
   auto componentDeclaration = std::make_unique<ComponentDeclaration>();
   componentDeclaration->typeId = typeId;
   componentDeclaration->name = component_name;

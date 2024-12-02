@@ -24,16 +24,22 @@ struct ParserFunctionArgument
   ArgType argType = ArgType::ReadWrite;
   const char *get_type() const
   {
+    if (optional)
+    {
+      return argType == ArgType::ReadWrite ?
+            "ecs::Query::ComponentAccess::READ_WRITE_OPTIONAL" :
+            "ecs::Query::ComponentAccess::READ_ONLY_OPTIONAL";
+    }
     switch (argType)
     {
     case ArgType::ReadWrite:
-      return "ecs::AccessType::ReadWrite";
+      return "ecs::Query::ComponentAccess::READ_WRITE";
       break;
     case ArgType::ReadOnly:
-      return "ecs::AccessType::ReadOnly";
+      return "ecs::Query::ComponentAccess::READ_ONLY";
       break;
     case ArgType::Copy:
-      return "ecs::AccessType::Copy";
+      return "ecs::Query::ComponentAccess::READ_COPY";
       break;
     }
   }
@@ -61,7 +67,7 @@ struct FileInfo
 
 struct ParserSystemDescription
 {
-  std::string sys_file, sys_name;
+  std::string sys_file, sys_name, unique_name;
   std::vector<ParserFunctionArgument> args, req_args, req_not_args;
   std::vector<std::string> before, after, tags;
   std::string stage;
@@ -95,8 +101,8 @@ struct ParserSystemDescription
 static const std::regex name_regex(NAME);
 static const std::regex system_full_regex(SYSTEM SPACE NAME SPACE ARGS_L);
 static const std::regex system_regex(SYSTEM);
-static const std::regex query_full_regex(QUERY SPACE NAME SPACE "[(]" SPACE ARGS_R SPACE ARGS_L);
-static const std::regex singl_query_full_regex(QUERY SPACE NAME SPACE "[(]" SPACE NAME SPACE "[,]" SPACE ARGS_R SPACE ARGS_L);
+static const std::regex query_full_regex(QUERY SPACE NAME SPACE "[(]" SPACE NAME SPACE "[,]" SPACE ARGS_R SPACE ARGS_L);
+static const std::regex singl_query_full_regex(QUERY SPACE NAME SPACE "[(]" SPACE NAME SPACE "[,]" SPACE NAME SPACE "[,]" SPACE ARGS_R SPACE ARGS_L);
 static const std::regex query_regex(QUERY);
 static const std::regex event_full_regex(EVENT SPACE NAME SPACE ARGS_L);
 static const std::regex event_regex(EVENT);
@@ -348,6 +354,7 @@ void parse_system(std::vector<ParserSystemDescription> &systemsDescriptions,
 
     descr.sys_file = std::move(systemPath);
     descr.sys_name = name_range.get();
+    descr.unique_name = descr.sys_file + "[" + descr.sys_name + "]";
     parse_definition(definition_range, descr);
     auto matched_args = get_matches(args_range, arg_regex);
     for (auto &arg : matched_args)
@@ -371,6 +378,29 @@ void template_arguments(std::ofstream &outFile, const std::vector<ParserFunction
   }
 }
 
+void template_query_types(std::ofstream &outFile, const std::vector<ParserFunctionArgument> &args)
+{
+  for (uint i = 0; i < args.size(); i++)
+  {
+    auto &arg = args[i];
+    if (!arg.optional)
+    {
+      snprintf(buffer, bufferSize, "%s%s%s%s",
+              arg.is_const ? "const " : "",
+              arg.type.c_str(), "*",
+              i + 1 == (uint)args.size() ? "" : ", ");
+    }
+    else
+    {
+      snprintf(buffer, bufferSize, "ecs::PrtWrapper<%s%s>%s",
+              arg.is_const ? "const " : "",
+              arg.type.c_str(),
+              i + 1 == (uint)args.size() ? "" : ", ");
+    }
+    outFile << buffer;
+  }
+}
+
 void write(std::ofstream &outFile, const char *fmt, ...)
 {
   va_list args;
@@ -380,12 +410,12 @@ void write(std::ofstream &outFile, const char *fmt, ...)
   outFile << buffer;
 }
 
-static void declare_caches(std::ofstream &outFile, const std::vector<ParserSystemDescription> &descr)
+static void declare_caches(std::ofstream &/* outFile */, const std::vector<ParserSystemDescription> &/* descr */)
 {
-  for (auto &query : descr)
-  {
-    outFile << "static ecs::QueryCache " << query.sys_name << "__cache__;\n\n";
-  }
+  // for (auto &query : descr)
+  // {
+  //   outFile << "static ecs::QueryCache " << query.sys_name << "__cache__;\n\n";
+  // }
 }
 
 static void query_definition(std::ofstream &outFile, const std::vector<ParserSystemDescription> &descr)
@@ -395,15 +425,19 @@ static void query_definition(std::ofstream &outFile, const std::vector<ParserSys
     const char *name = query.sys_name.c_str();
     write(outFile,
           "template<typename Callable>\n"
-          "static void %s(Callable lambda)\n"
+          "static void %s(ecs::EcsManager &mgr, Callable &&query_function)\n"
           "{\n"
-          "  ecs::perform_query<",
-          name);
-    template_arguments(outFile, query.args);
+          "  constexpr ecs::NameHash queryHash = ecs::hash(\"%s\");\n"
+          "  ecs::call_query(mgr, queryHash, [&](ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)\n"
+          "  {\n"
+          "    const int N = %d;\n"
+          "    ecs::templated_archetype_iterate<N, ",
+          name, query.unique_name.c_str(), query.args.size());
+    template_query_types(outFile, query.args);
     write(outFile,
-          ">(%s__cache__, lambda);\n"
-          "}\n\n",
-          name);
+          ">(archetype, to_archetype_component, std::move(query_function), std::make_index_sequence<N>());\n"
+          "  });\n"
+          "}\n\n");
   }
 }
 
@@ -432,11 +466,15 @@ static void system_definition(std::ofstream &outFile, const std::vector<ParserSy
   {
     const char *name = query.sys_name.c_str();
     write(outFile,
-          "static void %s_implementation()\n"
+          "static void %s_implementation(ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)\n"
           "{\n"
-          "  ecs::perform_system(%s__cache__, %s);\n"
-          "}\n\n",
-          name, name, name);
+          "  const int N = %d;\n"
+          "  ecs::templated_archetype_iterate<N, ",
+          name, query.args.size());
+    template_query_types(outFile, query.args);
+    write(outFile,
+          ">(archetype, to_archetype_component, %s, std::make_index_sequence<N>());\n"
+          "}\n\n", name);
   }
 }
 
@@ -485,51 +523,36 @@ static void request_definition(std::ofstream &outFile, const std::vector<ParserS
 void fill_arguments(std::ofstream &outFile, const std::vector<ParserFunctionArgument> &args, bool event)
 {
   uint i0 = event ? 1 : 0;
-  if (i0 == args.size())
-  {
-    write(outFile, "  {},\n");
-    return;
-  }
-  write(outFile, "  {\n");
+
+  write(outFile, "    {\n");
   for (uint i = i0; i < args.size(); i++)
   {
     auto &arg = args[i];
 
     write(outFile,
-          "    {\"%s\", ecs::get_type_index<%s>(), ecs::Hash(\"%s\"), %s, %s, ecs::is_singleton<%s>()}%s\n",
+          "      {ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<%s>::typeId, \"%s\"), %s}%s\n",
+          arg.type.c_str(),
           arg.name.c_str(),
-          arg.type.c_str(),
-          arg.type.c_str(),
           arg.get_type(),
-          arg.optional ? "true" : "false",
-          arg.type.c_str(),
           i + 1 == (uint)args.size() ? "" : ",");
   }
-  write(outFile, "  },\n");
+  write(outFile, "    };\n");
 }
 
-void fill_requared_arguments(std::ofstream &outFile, const std::vector<ParserFunctionArgument> &args, bool end_comma)
+void fill_required_arguments(std::ofstream &outFile, const std::vector<ParserFunctionArgument> &args)
 {
-  if (args.empty())
-  {
-    if (end_comma)
-      write(outFile, "  {},\n");
-    else
-      write(outFile, "  {}\n");
-    return;
-  }
-  write(outFile, "  {\n");
+  write(outFile, "    {\n");
   for (uint i = 0; i < args.size(); i++)
   {
     auto &arg = args[i];
 
     write(outFile,
-          "    {\"%s\", ecs::TypeIndex<%s>::value}%s\n",
-          arg.name.c_str(),
+          "      ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<%s>::typeId, \"%s\")%s\n",
           arg.type.c_str(),
+          arg.name.c_str(),
           i + 1 == (uint)args.size() ? "" : ",");
   }
-  write(outFile, "  },\n");
+  write(outFile, "    };\n");
 }
 
 static void fill_string_array(std::ofstream &outFile, const std::vector<std::string> &args)
@@ -553,29 +576,39 @@ static void fill_string_array(std::ofstream &outFile, const std::vector<std::str
 static void fill_common_query_part(
     std::ofstream &outFile,
     const ParserSystemDescription &descr,
-    const char *register_func,
-    bool is_query,
+    const char *query_type,
     bool is_event)
 {
-
-  const char *name = descr.sys_name.c_str();
   write(outFile,
-        "  %s(\n"
-        "  \"%s\",\n"
-        "  \"%s\",\n"
-        "  &%s__cache__,\n",
-        register_func, descr.sys_file.c_str(), name, name);
+        "  {\n"
+        "    %s query;\n"
+        "    query.uniqueName = \"%s\";\n"
+        "    query.nameHash = ecs::hash(query.uniqueName.c_str());\n"
+        "    query.querySignature =\n",
+        query_type, descr.unique_name.c_str());
   fill_arguments(outFile, descr.args, is_event);
-  fill_requared_arguments(outFile, descr.req_args, true);
-  fill_requared_arguments(outFile, descr.req_not_args, !is_query);
+  write(outFile,
+        "    query.requireComponents =\n");
+  fill_required_arguments(outFile, descr.req_args);
+  write(outFile,
+        "    query.excludeComponents =\n");
+  fill_required_arguments(outFile, descr.req_not_args);
+}
+
+static void fill_query_end(std::ofstream &outFile, const char *register_func)
+{
+  write(outFile,
+        "    %s(mgr, std::move(query));\n"
+        "  }\n",
+        register_func);
 }
 
 void register_queries(std::ofstream &outFile, const std::vector<ParserSystemDescription> &descr)
 {
   for (auto &query : descr)
   {
-    fill_common_query_part(outFile, query, "ecs::register_query", true, false);
-    write(outFile, "  );\n\n");
+    fill_common_query_part(outFile, query, "ecs::Query", false);
+    fill_query_end(outFile, "ecs::register_query");
   }
 }
 
@@ -584,12 +617,17 @@ void register_systems(std::ofstream &outFile, const std::vector<ParserSystemDesc
   for (auto &query : descr)
   {
     const char *name = query.sys_name.c_str();
-    fill_common_query_part(outFile, query, "ecs::register_system", false, false);
-    write(outFile, "  \"%s\",\n", query.stage.c_str());
-    fill_string_array(outFile, query.before);
-    fill_string_array(outFile, query.after);
-    fill_string_array(outFile, query.tags);
-    write(outFile, "  &%s_implementation);\n\n", name);
+    fill_common_query_part(outFile, query,  "ecs::System",false);
+
+    write(outFile,
+          "    query.update_archetype = %s_implementation;\n",
+          name);
+    // write(outFile, "  \"%s\",\n", query.stage.c_str());
+    // fill_string_array(outFile, query.before);
+    // fill_string_array(outFile, query.after);
+    // fill_string_array(outFile, query.tags);
+    // write(outFile, "  &%s_implementation);\n\n", name);
+    fill_query_end(outFile, "ecs::register_system");
   }
 }
 
@@ -599,10 +637,11 @@ void register_events(std::ofstream &outFile, const std::vector<ParserSystemDescr
   {
     const char *name = query.sys_name.c_str();
     const char *event_type = query.args[0].type.c_str();
-    fill_common_query_part(outFile, query, "ecs::register_event", false, true);
+    fill_common_query_part(outFile, query,  "ecs::Event",true);
     fill_string_array(outFile, query.before);
     fill_string_array(outFile, query.after);
     fill_string_array(outFile, query.tags);
+    fill_query_end(outFile, "ecs::register_event");
     write(outFile,
           "  &%s_handler, &%s_single_handler,\n"
           "  ecs::EventIndex<%s>::value);\n\n",
@@ -616,10 +655,11 @@ void register_requests(std::ofstream &outFile, const std::vector<ParserSystemDes
   {
     const char *name = query.sys_name.c_str();
     const char *event_type = query.args[0].type.c_str();
-    fill_common_query_part(outFile, query, "ecs::register_request", false, true);
+    fill_common_query_part(outFile, query, "ecs::Request", true);
     fill_string_array(outFile, query.before);
     fill_string_array(outFile, query.after);
     fill_string_array(outFile, query.tags);
+    fill_query_end(outFile, "ecs::register_request");
     write(outFile,
           "  &%s_handler, &%s_single_handler,\n"
           "  ecs::RequestIndex<%s>::value);\n\n",
@@ -658,7 +698,7 @@ void process_inl_file(const fs::path &path, const fs::path &root)
   std::ofstream outFile;
   outFile.open(pathStr + ".cpp", std::ios::out);
   outFile << "#include " << path.filename() << "\n";
-  outFile << "#include <ecs/ecs_perform.h>\n";
+  outFile << "#include <ecs/query_iteration.h>\n";
   outFile << "//Code-generator production\n\n";
 
   declare_caches(outFile, queriesDescriptions);
@@ -674,8 +714,7 @@ void process_inl_file(const fs::path &path, const fs::path &root)
   request_definition(outFile, requestDescriptions);
 
   std::string fileName = path.stem().string();
-  std::string registrationFunc = "registration_pull_" + fileName;
-  outFile << "static void " << registrationFunc << "()\n{\n";
+  outFile << "static void ecs_registration(ecs::EcsManager &mgr)\n{\n";
 
   register_queries(outFile, queriesDescriptions);
   register_queries(outFile, singlqueriesDescriptions);
@@ -684,7 +723,7 @@ void process_inl_file(const fs::path &path, const fs::path &root)
   register_requests(outFile, requestDescriptions);
 
   outFile << "}\n";
-  outFile << "ECS_FILE_REGISTRATION(&" << registrationFunc << ")\n";
+  outFile << "static ecs::CodegenFileRegistration fileRegistration(&ecs_registration);\n";
   outFile << "ECS_PULL_DEFINITION(" << ("variable_pull_" + fileName) << ")\n";
   outFile.close();
 

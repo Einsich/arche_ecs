@@ -6,10 +6,7 @@ namespace ecs
 {
 
 TemplateId template_registration(
-  const ComponentDeclarationMap &component_map,
-  const TypeDeclarationMap &type_map,
-  ArchetypeMap &archetype_map,
-  TemplatesMap &templates,
+  EcsManager &mgr,
   ComponentId eid_component_id,
   const char *_name,
   const std::span<TemplateId> &parent_templates,
@@ -17,7 +14,7 @@ TemplateId template_registration(
   ArchetypeChunkSize chunk_size_power)
 {
   TemplateId templateId = hash(_name);
-  if (templates.find(templateId) != templates.end())
+  if (mgr.templates.find(templateId) != mgr.templates.end())
   {
     printf("Template \"%s\" already exists\n", _name);
     return templateId;
@@ -25,8 +22,8 @@ TemplateId template_registration(
   components.push_back(ecs::ComponentInit{eid_component_id, ecs::EntityId()});
   for (TemplateId parent_template : parent_templates)
   {
-    auto it = templates.find(parent_template);
-    if (it == templates.end())
+    auto it = mgr.templates.find(parent_template);
+    if (it == mgr.templates.end())
     {
       printf("Parent template not found\n");
       return templateId;
@@ -44,11 +41,11 @@ TemplateId template_registration(
       }
     }
   }
-  ArchetypeId archetypeId = get_or_create_archetype(component_map, type_map, archetype_map, components, chunk_size_power);
+  ArchetypeId archetypeId = get_or_create_archetype(mgr, components, chunk_size_power);
 
   Template templateRecord{std::string(_name), std::move(components), archetypeId, {}};
 
-  templates[templateId] = std::move(templateRecord);
+  mgr.templates[templateId] = std::move(templateRecord);
 
   return templateId;
 }

@@ -28,6 +28,11 @@ Archetype::Archetype(const TypeDeclarationMap &type_map, ArchetypeId archetype_i
   for (auto [componentId, typeId] : type)
   {
     const TypeDeclaration *typeDeclaration = find(type_map, typeId);
+    if (typeDeclaration == nullptr)
+    {
+      printf("[ECS] Error: Type not found\n");
+      continue;
+    }
     collumns.emplace_back(chunk_size_power, typeDeclaration->sizeOfElement, typeDeclaration->alignmentOfElement, typeId);
     Collumn &collumn = collumns.back();
     collumn.debugName = typeDeclaration->typeName;

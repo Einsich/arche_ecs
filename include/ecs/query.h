@@ -11,7 +11,7 @@ using ToComponentMap = std::vector<int>;
 struct ArchetypeRecord
 {
   ArchetypeId archetypeId;
-  std::vector<int> toComponentIndex;
+  ToComponentMap toComponentIndex;
 };
 
 struct Query

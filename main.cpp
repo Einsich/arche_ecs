@@ -6,9 +6,11 @@
 #include <vector>
 #include <algorithm>
 #include <random>
+#include <array>
 
 struct IBody
 {
+  std::array<float, 128 * 2> data;
   virtual void update(float dt) = 0;
   virtual ~IBody() = default;
 };
@@ -56,24 +58,28 @@ struct Body3 : public IBody
 // static_assert(sizeof(Body3) == 48);
 
 int main2();
+void main3(int TEST_COUNT, const int entityCount);
 
 int main()
 {
-  main2();
-  return 0;
+  // main2();
+  // return 0;
   Timer timer("Main");
   // position
   // position, velocity
   // position, velocity, acceleration
   const float dt = 0.02f;
-  const int N1 = 100000;
+  const int N1 = 10;
   // const int N2 = 1000;
   // const int N3 = 1000;
 
   const int TEST_COUNT = 256;
+
+  main3(TEST_COUNT, N1);
+
   {
     std::vector<Body1> bodies1(N1);
-    Timer timer("Body1 Summary");
+    Timer timer("Body1 Array");
 
     for (int j = 0 ; j < TEST_COUNT; j++)
     {
@@ -87,7 +93,7 @@ int main()
 
   {
     std::vector<Body2> bodies1(N1);
-    Timer timer("Body2 Summary");
+    Timer timer("Body2 Array");
 
     for (int j = 0 ; j < TEST_COUNT; j++)
     {
@@ -101,16 +107,15 @@ int main()
 
   {
     std::vector<Body3> bodies1(N1);
-    Timer timer("Body3 Summary");
+    Timer timer("Body3 Array");
 
     for (int j = 0 ; j < TEST_COUNT; j++)
     {
       // Timer timer("Body3 Iteration");
       for (int i = 0; i < N1; i++)
       {
+        bodies1[i].velocity = bodies1[i].acceleration * dt;
         bodies1[i].position = bodies1[i].position + bodies1[i].velocity * dt;
-        // bodies1[i].velocity = bodies1[i].acceleration * dt;
-        // bodies1[i].position = bodies1[i].position + bodies1[i].velocity * dt;
       }
     }
   }
@@ -125,7 +130,7 @@ int main()
     auto rng = std::default_random_engine {};
     std::shuffle(std::begin(bodies1), std::end(bodies1), rng);
 
-    Timer timer("Body1 Pointer Summary");
+    Timer timer("Body1 Pointers");
     for (int j = 0 ; j < TEST_COUNT; j++)
     {
       // Timer timer("Body1 Pointer Iteration");
@@ -146,13 +151,14 @@ int main()
     auto rng = std::default_random_engine {};
     std::shuffle(std::begin(bodies1), std::end(bodies1), rng);
 
-    Timer timer("Body2 Pointer Summary");
+    Timer timer("Body2 Pointers");
     for (int j = 0 ; j < TEST_COUNT; j++)
     {
       // Timer timer("Body2 Pointer Iteration");
       for (int i = 0; i < N1; i++)
       {
-        bodies1[i]->position = bodies1[i]->position + bodies1[i]->velocity * dt;
+        Body2 *body = bodies1[i].get();
+        body->position = body->position + body->velocity * dt;
       }
     }
   }
@@ -168,14 +174,15 @@ int main()
     auto rng = std::default_random_engine {};
     std::shuffle(std::begin(bodies1), std::end(bodies1), rng);
 
-    Timer timer("Body3 Pointer Summary");
+    Timer timer("Body3 Pointer");
     for (int j = 0 ; j < TEST_COUNT; j++)
     {
       // Timer timer("Body3 Pointer Iteration");
       for (int i = 0; i < N1; i++)
       {
-        bodies1[i]->velocity = bodies1[i]->acceleration * dt;
-        bodies1[i]->position = bodies1[i]->position + bodies1[i]->velocity * dt;
+        Body3 *body = bodies1[i].get();
+        body->velocity = body->acceleration * dt;
+        body->position = body->position + body->velocity * dt;
       }
     }
   }
@@ -191,7 +198,7 @@ int main()
     auto rng = std::default_random_engine {};
     std::shuffle(std::begin(bodies1), std::end(bodies1), rng);
 
-    Timer timer("IBody1 Pointer Summary");
+    Timer timer("IBody1 Virtual");
     for (int j = 0 ; j < TEST_COUNT; j++)
     {
       // Timer timer("IBody Pointer Iteration");
@@ -213,7 +220,7 @@ int main()
     auto rng = std::default_random_engine {};
     std::shuffle(std::begin(bodies1), std::end(bodies1), rng);
 
-    Timer timer("IBody2 Pointer Summary");
+    Timer timer("IBody2 Virtual");
     for (int j = 0 ; j < TEST_COUNT; j++)
     {
       // Timer timer("IBody Pointer Iteration");
@@ -235,7 +242,7 @@ int main()
     auto rng = std::default_random_engine {};
     std::shuffle(std::begin(bodies1), std::end(bodies1), rng);
 
-    Timer timer("IBody3 Pointer Summary");
+    Timer timer("IBody3 Virtual");
     for (int j = 0 ; j < TEST_COUNT; j++)
     {
       // Timer timer("IBody Pointer Iteration");
@@ -251,39 +258,46 @@ int main()
     std::vector<float3> positionsStorage(N1);
     std::vector<float3> velocitiesStorage(N1);
     std::vector<float3> accelerationsStorage(N1);
-    float3 *positions = positionsStorage.data();
-    float3 *velocities = velocitiesStorage.data();
-    const float3 * accelerations = accelerationsStorage.data();
-
-    Timer timer("SoA Summary");
+    Timer timer("Body3 SoA Split Data");
     for (int j = 0 ; j < TEST_COUNT; j++)
     {
+      float3 * __restrict__ positions = positionsStorage.data();
+      float3 * __restrict__ velocities  = velocitiesStorage.data();
+      const float3 * accelerations = accelerationsStorage.data();
+
       // Timer timer("SoA Iteration");
       for (int i = 0; i < N1; i++)
       {
-        velocities[i] = accelerations[i] * dt;
-        positions[i] = positions[i] + velocities[i] * dt;
+        *velocities = *accelerations * dt;
+        *positions = *positions + *velocities * dt;
+
+        positions += 1;
+        velocities += 1;
+        accelerations += 1;
       }
     }
   }
   // test SoA2
   {
     std::vector<float3> float3Storage(N1 * 3);
-    float3 *positions = float3Storage.data() + 0;
-    float3 *velocities = float3Storage.data() + N1;
-    const float3 * accelerations = float3Storage.data() + N1 * 2;
-
-    Timer timer("SoA Summary");
+    Timer timer("Body3 SoA One Data");
     for (int j = 0 ; j < TEST_COUNT; j++)
     {
+      float3 *__restrict__ positions = float3Storage.data() + 0;
+      float3 *__restrict__ velocities = float3Storage.data() + N1;
+      const float3 *__restrict__  accelerations = float3Storage.data() + N1 * 2;
+
       // Timer timer("SoA Iteration");
       for (int i = 0; i < N1; i++)
       {
-        velocities[i] = accelerations[i] * dt;
-        positions[i] = positions[i] + velocities[i] * dt;
+        *velocities = *accelerations * dt;
+        *positions = *positions + *velocities * dt;
+
+        positions += 1;
+        velocities += 1;
+        accelerations += 1;
       }
     }
   }
 
-  printf("Hello, World!\n");
 }

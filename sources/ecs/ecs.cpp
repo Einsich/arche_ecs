@@ -19,10 +19,6 @@ ECS_TYPE_DECLARATION(int)
 ECS_TYPE_DECLARATION(float3)
 ECS_TYPE_DECLARATION_ALIAS(std::string, "string")
 
-ECS_TYPE_REGISTRATION(ecs::EntityId)
-ECS_TYPE_REGISTRATION(int)
-ECS_TYPE_REGISTRATION(float3)
-ECS_TYPE_REGISTRATION(std::string)
 
 int main2()
 {
@@ -48,6 +44,7 @@ int main2()
     mgr.typeMap[type_declaration.typeId] = type_declaration;
   });
 
+  ecs::CodegenFileRegistration::register_all_codegen_files(mgr);
 
   for (const auto &[id, type] : mgr.typeMap)
   {
@@ -90,7 +87,6 @@ int main2()
     printf("[ECS] archetype: %x, components: %zu\n", archetype.archetypeId, archetype.collumns.size());
   }
 
-  ecs::CodegenFileRegistration::register_all_codegen_files(mgr);
 
 
   //unfortunately, we can't use initializer_list here, because it doesn't support move semantics

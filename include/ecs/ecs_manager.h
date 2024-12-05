@@ -158,6 +158,7 @@ inline void register_query(EcsManager &mgr, Query &&query)
   {
     query.try_registrate(archetype);
   }
+  printf("[ECS] Register query %s\n", query.uniqueName.c_str());
   mgr.queries[query.nameHash] = std::move(query);
 }
 
@@ -167,6 +168,7 @@ inline void register_system(EcsManager &mgr, System &&system)
   {
     system.try_registrate(archetype);
   }
+  printf("[ECS] Register system %s\n", system.uniqueName.c_str());
   mgr.systems[system.nameHash] = std::move(system);
 }
 

@@ -61,7 +61,7 @@ static void print_name_implementation(ecs::Archetype &archetype, const ecs::ToCo
 static void system_perf_test1_implementation(ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)
 {
   const int N = 1;
-  ecs::templated_archetype_iterate<N, float3*>(archetype, to_archetype_component, system_perf_test1, std::make_index_sequence<N>());
+  ecs::templated_archetype_iterate<N, float3 *>(archetype, to_archetype_component, system_perf_test1, std::make_index_sequence<N>());
 }
 
 static void system_perf_test2_implementation(ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)

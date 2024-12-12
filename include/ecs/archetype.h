@@ -43,15 +43,15 @@ struct Archetype
   void try_add_chunk(int requiredEntityCount);
 
   // return index of the added entity
-  void add_entity(const TypeDeclarationMap &type_map, const InitializerList &template_init, InitializerList override_list);
+  void add_entity(const TypeDeclarationMap &type_map, const InitializerList &template_init, InitializerList &&override_list);
 
-  void add_entities(const TypeDeclarationMap &type_map, const InitializerList &template_init, InitializerSoaList override_soa_list);
+  void add_entities(const TypeDeclarationMap &type_map, const InitializerList &template_init, InitializerSoaList &&override_soa_list);
 
   void remove_entity(const TypeDeclarationMap &type_map, uint32_t entityIndex);
 
 };
 
-using ArchetypeMap = ska::flat_hash_map<ArchetypeId, Archetype>;
+using ArchetypeMap = ska::flat_hash_map<ArchetypeId, std::unique_ptr<Archetype>>;
 
 ArchetypeId get_or_create_archetype(EcsManager &mgr, const InitializerList &components, ArchetypeChunkSize chunk_size_power, const char *template_name);
 

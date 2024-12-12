@@ -97,17 +97,12 @@ void main3(int TEST_COUNT, int entityCount)
     mgr.typeMap[type_declaration.typeId] = type_declaration;
   });
 
-
-  ecs::ComponentId positionId = ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<float3>::typeId, "position");
-  ecs::ComponentId velocityId = ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<float3>::typeId, "velocity");
-  ecs::ComponentId accelerationId = ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<float3>::typeId, "acceleration");
-
   ecs::CodegenFileRegistration::register_all_codegen_files(mgr);
   ecs::TemplateId bodyTemplate = template_registration(mgr, "body",
     {{
-      {positionId, float3{}},
-      {velocityId, float3{}},
-      {accelerationId, float3{}},
+      {mgr, "position", float3{}},
+      {mgr, "velocity", float3{}},
+      {mgr, "acceleration", float3{}},
     }}, ecs::ArchetypeChunkSize::Thousands);
 
   {
@@ -140,14 +135,18 @@ void main3(int TEST_COUNT, int entityCount)
       velocities.push_back({f, f, f});
       accelerations.push_back({1.f, 1.f, 1.f});
     }
-    ecs::InitializerSoaList init;
+
+    // this code id too unoptimal, because of ComponentDataSoa implementation
+    ecs::InitializerSoaList init =
+      {{
+          {mgr, "position", std::move(positions)},
+          {mgr, "velocity", std::move(velocities)},
+          {mgr, "acceleration", std::move(accelerations)},
+      }};
+
     mgr.create_entities(
       bodyTemplate,
-      {{
-          {"position", std::move(positions)},
-          {"velocity", std::move(velocities)},
-          {"acceleration", std::move(accelerations)},
-      }}
+      std::move(init)
     );
   }
 
@@ -182,7 +181,7 @@ void main3(int TEST_COUNT, int entityCount)
       if (it != mgr.systems.end())
       {
         ecs::System &system = it->second;
-        ecs::perform_system(mgr.archetypeMap, system);
+        ecs::perform_system(system);
       }
     }
   }
@@ -194,7 +193,7 @@ void main3(int TEST_COUNT, int entityCount)
       if (it != mgr.systems.end())
       {
         ecs::System &system = it->second;
-        ecs::perform_system(mgr.archetypeMap, system);
+        ecs::perform_system(system);
       }
     }
   }
@@ -206,7 +205,7 @@ void main3(int TEST_COUNT, int entityCount)
       if (it != mgr.systems.end())
       {
         ecs::System &system = it->second;
-        ecs::perform_system(mgr.archetypeMap, system);
+        ecs::perform_system(system);
       }
     }
   }

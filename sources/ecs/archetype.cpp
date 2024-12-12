@@ -56,7 +56,7 @@ void Archetype::try_add_chunk(int requiredEntityCount)
   }
 }
 
-void Archetype::add_entity(const TypeDeclarationMap &type_map, const InitializerList &template_init, InitializerList override_list)
+void Archetype::add_entity(const TypeDeclarationMap &type_map, const InitializerList &template_init, InitializerList &&override_list)
 {
   try_add_chunk(1);
   for (Collumn &collumn : collumns)
@@ -85,7 +85,7 @@ void Archetype::add_entity(const TypeDeclarationMap &type_map, const Initializer
   entityCount++;
 }
 
-void Archetype::add_entities(const TypeDeclarationMap &type_map, const InitializerList &template_init, InitializerSoaList override_soa_list)
+void Archetype::add_entities(const TypeDeclarationMap &type_map, const InitializerList &template_init, InitializerSoaList &&override_soa_list)
 {
   int requiredEntityCount = override_soa_list.size();
   try_add_chunk(requiredEntityCount);

@@ -17,8 +17,19 @@ struct PrtWrapper
   void operator++() { ptr = ptr ? ptr + 1 : ptr; }
   void operator+=(int x) { ptr = ptr ? ptr + x : ptr; }
 };
-template<size_t UNROLL_N, typename Callable, typename ...NoCRefPtrArgs>
-void perform_system_unroll(Callable &&callable_query, uint32_t elementCount, NoCRefPtrArgs ...components)
+template <typename T>
+struct restrict_type
+{
+  using type = T __restrict__;
+};
+template<typename T>
+struct restrict_type<PrtWrapper<T>>
+{
+  using type = PrtWrapper<T>;
+};
+
+template<size_t UNROLL_N, typename ...PtrArgs, typename Callable>
+void perform_system_unroll(Callable &&callable_query, uint32_t elementCount, typename restrict_type<PtrArgs>::type ...components)
 {
   #pragma unroll UNROLL_N
   for (uint32_t i = 0; i < elementCount; i++)
@@ -28,30 +39,14 @@ void perform_system_unroll(Callable &&callable_query, uint32_t elementCount, NoC
   }
 }
 
-template<typename Callable, typename ...NoCRefPtrArgs>
-void perform_system(Callable &&callable_query, uint32_t elementCount, NoCRefPtrArgs ...components)
-{
-  // #pragma unroll 4
-  for (uint32_t i = 0; i < elementCount; i++)
-  {
-    callable_query((*components)...);
-    ((++components), ...);
-  }
-}
 
 template<size_t N, typename ...CastArgs, typename Callable, std::size_t... I>
 void templated_archetype_iterate(ecs::Archetype &archetype, const ecs::ToComponentMap &chunks, Callable &&callable_query, std::index_sequence<I...>)
 {
-  int componenIdx[N] = {to_archetype_component[I]...};
-
-  char **chunks[N] = {
-    (componenIdx[I] >= 0 ? archetype.collumns[componenIdx[I]].chunks.data() : nullptr)...
-  };
-
-  for (uint32_t chunkIdx = 0, chunkCount = archetype.chunkCount; chunkIdx < chunkCount; chunkIdx++)
+  for (uint32_t chunkIdx = 0, chunkCount = archetype.chunkCount, entityOffset = 0; chunkIdx < chunkCount; chunkIdx++, entityOffset += archetype.chunkSize)
   {
-    uint32_t elementCount = std::min(archetype.entityCount - archetype.chunkSize * chunkIdx, archetype.chunkSize);
-    perform_system_unroll<4>(std::move(callable_query), elementCount, (CastArgs)(chunks[I] ? chunks[I][chunkIdx] : nullptr)...);
+    uint32_t elementCount = std::min(archetype.entityCount - entityOffset, archetype.chunkSize);
+    perform_system_unroll<4, CastArgs...>(std::move(callable_query), elementCount, (CastArgs)(chunks[I] ? (*chunks[I])[chunkIdx] : nullptr)...);
   }
 }
 
@@ -64,12 +59,7 @@ void call_query(ecs::EcsManager &mgr, ecs::NameHash query_hash, QueryImpl &&quer
     ecs::Query &query = it->second;
     for (const auto &archetypeRecord : query.archetypesCache)
     {
-      auto it = mgr.archetypeMap.find(archetypeRecord.archetypeId);
-      if (it == mgr.archetypeMap.end())
-      {
-        continue;
-      }
-      ecs::Archetype &archetype = it->second;
+      ecs::Archetype &archetype = *archetypeRecord.archetype;
       const ecs::ToComponentMap &toComponentIndex = archetypeRecord.toComponentIndex;
       query_impl(archetype, toComponentIndex);
     }

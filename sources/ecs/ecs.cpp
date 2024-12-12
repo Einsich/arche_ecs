@@ -84,7 +84,7 @@ int main2()
 
   for (const auto &[id, archetype] : mgr.archetypeMap)
   {
-    printf("[ECS] archetype: %x, components: %zu\n", archetype.archetypeId, archetype.collumns.size());
+    printf("[ECS] archetype: %x, components: %zu\n", archetype->archetypeId, archetype->collumns.size());
   }
 
 
@@ -188,7 +188,7 @@ int main2()
 
   for (auto &[hashId, system] : mgr.systems)
   {
-    ecs::perform_system(mgr.archetypeMap, system);
+    ecs::perform_system(system);
   }
   query_test(mgr);
 

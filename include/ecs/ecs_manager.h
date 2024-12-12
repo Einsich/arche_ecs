@@ -20,7 +20,7 @@ struct EcsManager
 {
   TypeDeclarationMap typeMap;
   ComponentDeclarationMap componentMap;
-  ska::flat_hash_map<ArchetypeId, Archetype> archetypeMap;
+  ArchetypeMap archetypeMap;
   ska::flat_hash_map<NameHash, Query> queries;
   ska::flat_hash_map<NameHash, System> systems;
   EntityContainer entityContainer;
@@ -43,7 +43,7 @@ struct EcsManager
       printf("Archetype not found\n");
       return EntityId();
     }
-    Archetype &archetype = it->second;
+    Archetype &archetype = *it->second;
     uint32_t entityIndex = archetype.entityCount;
     ecs::EntityId eid = entityContainer.create_entity(archetypeId, entityIndex);
     override_list.push_back(ecs::ComponentInit(eidComponentId, ecs::EntityId(eid)));
@@ -64,7 +64,7 @@ struct EcsManager
     return create_entity(templateRecord.archetypeId, templateRecord.args, std::move(init_list));
   }
 
-  std::vector<EntityId> create_entities(ArchetypeId archetypeId, const InitializerList &template_init, InitializerSoaList override_soa_list)
+  std::vector<EntityId> create_entities(ArchetypeId archetypeId, const InitializerList &template_init, InitializerSoaList &&override_soa_list)
   {
     auto it = archetypeMap.find(archetypeId);
     if (it == archetypeMap.end())
@@ -72,13 +72,14 @@ struct EcsManager
       printf("Archetype not found\n");
       return {};
     }
-    Archetype &archetype = it->second;
+    Archetype &archetype = *it->second;
     int requiredEntityCount = override_soa_list.size();
-    std::vector<EntityId> eids(requiredEntityCount);
+    std::vector<EntityId> eids;
+    eids.reserve(requiredEntityCount);
     uint32_t entityIndex = archetype.entityCount;
     for (int i = 0; i < requiredEntityCount; i++)
     {
-      eids[i] = entityContainer.create_entity(archetypeId, entityIndex + i);
+      eids.push_back(entityContainer.create_entity(archetypeId, entityIndex + i));
     }
 
     // need to create copy to return list of eids
@@ -88,7 +89,7 @@ struct EcsManager
     return eids;
   }
 
-  std::vector<EntityId> create_entities(TemplateId templateId, InitializerSoaList init_soa_list)
+  std::vector<EntityId> create_entities(TemplateId templateId, InitializerSoaList &&init_soa_list)
   {
     auto it = templates.find(templateId);
     if (it == templates.end())
@@ -112,7 +113,7 @@ struct EcsManager
         printf("Archetype not found\n");
         return false;
       }
-      Archetype &archetype = it->second;
+      Archetype &archetype = *it->second;
       archetype.remove_entity(typeMap, componentIndex);
       entityContainer.destroy_entity(eid);
       return true;
@@ -128,6 +129,11 @@ TemplateId template_registration(
   InitializerList &&components,
   ArchetypeChunkSize chunk_size_power = ArchetypeChunkSize::Thousands);
 
+inline ComponentId get_or_add_component(EcsManager &manager, TypeId typeId, const char *component_name)
+{
+  return ecs::get_or_add_component(manager.componentMap, typeId, component_name);
+}
+
 
 inline TemplateId template_registration(EcsManager &manager, const char *_name, InitializerList &&components, ArchetypeChunkSize chunk_size_power = ArchetypeChunkSize::Thousands)
 {
@@ -139,16 +145,11 @@ inline TemplateId template_registration(EcsManager &manager, const char *_name, 
   return template_registration(manager, manager.eidComponentId, _name, {&parent_template, 1}, std::move(components), chunk_size_power);
 }
 
-inline void perform_system(ArchetypeMap &archetype_map, const System &system)
+inline void perform_system(const System &system)
 {
   for (const auto &archetypeRecord : system.archetypesCache)
   {
-    auto it = archetype_map.find(archetypeRecord.archetypeId);
-    if (it == archetype_map.end())
-    {
-      continue;
-    }
-    system.update_archetype(it->second, archetypeRecord.toComponentIndex);
+    system.update_archetype(*archetypeRecord.archetype, archetypeRecord.toComponentIndex);
   }
 }
 
@@ -156,7 +157,7 @@ inline void register_query(EcsManager &mgr, Query &&query)
 {
   for (const auto &[id, archetype] : mgr.archetypeMap)
   {
-    query.try_registrate(archetype);
+    query.try_registrate(archetype.get());
   }
   printf("[ECS] Register query %s\n", query.uniqueName.c_str());
   mgr.queries[query.nameHash] = std::move(query);
@@ -166,7 +167,7 @@ inline void register_system(EcsManager &mgr, System &&system)
 {
   for (const auto &[id, archetype] : mgr.archetypeMap)
   {
-    system.try_registrate(archetype);
+    system.try_registrate(archetype.get());
   }
   printf("[ECS] Register system %s\n", system.uniqueName.c_str());
   mgr.systems[system.nameHash] = std::move(system);
@@ -174,15 +175,16 @@ inline void register_system(EcsManager &mgr, System &&system)
 
 inline void register_archetype(EcsManager &mgr, Archetype &&archetype)
 {
+  std::unique_ptr<Archetype> archetypePtr = std::make_unique<Archetype>(std::move(archetype));
   for (auto &[id, query] : mgr.queries)
   {
-    query.try_registrate(archetype);
+    query.try_registrate(archetypePtr.get());
   }
   for (auto &[id, query] : mgr.systems)
   {
-    query.try_registrate(archetype);
+    query.try_registrate(archetypePtr.get());
   }
-  mgr.archetypeMap[archetype.archetypeId] = std::move(archetype);
+  mgr.archetypeMap[archetype.archetypeId] = std::move(archetypePtr);
 }
 
 } // namespace ecs

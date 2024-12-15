@@ -40,8 +40,23 @@
       },
       "command": "bin/codegen/${config:launchOption.currentConfig.BuildType.BUILD_PREFIX}/codegen.exe",
       "args": [
-        "sources/ecs",
+        "sources/tests",
         "-force_rebuild"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+    },
+    {
+      "type": "shell",
+      "label": "Run benchmark",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "command": "python3",
+      "args": [
+        "benchmarks/scripts/benchmark.py",
       ],
       "group": {
         "kind": "build",

@@ -8,9 +8,20 @@
       "name": "Run project",
       "type": "cppvsdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/bin/${config:launchOption.currentConfig.BuildType.BUILD_PREFIX}/ecs.exe",
+      "program": "${workspaceFolder}/bin/${config:launchOption.currentConfig.BuildType.BUILD_PREFIX}/sources/${config:launchOption.currentConfig.Test}.exe",
       "cwd": "${workspaceFolder}",
       "args": [],
+    },
+    {
+      "name": "Run benchmark",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/bin/${config:launchOption.currentConfig.BuildType.BUILD_PREFIX}/sources/${config:launchOption.currentConfig.Test}.exe",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "--repeat_count=1",
+        "--output=benchmark.csv",
+      ],
     },
   ]
 }

@@ -11,13 +11,17 @@ struct Timer
 
   Timer(const char *label) : label(label), start(std::chrono::high_resolution_clock::now()) {}
 
-  void stop()
+  // return delta time in milliseconds
+  float stop()
   {
     auto end = std::chrono::high_resolution_clock::now();
     // print delta time in milliseconds
-    printf("%s : (%f ns)\n", label, std::chrono::duration<float, std::micro>(end - start).count());
+    float delta = std::chrono::duration<float, std::milli>(end - start).count();
+    printf("%s : (%f ns)\n", label, delta);
     stopped = true;
+    return delta;
   }
+
   ~Timer()
   {
     if (!stopped)

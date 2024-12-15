@@ -14,13 +14,17 @@
         "value": {"CMAKE_BUILD_TYPE" : "Release", "BUILD_PREFIX" : "rel"}
       }
     ],
+    "Test": [
+      "tests/benchmark",
+      "tests/unit_tests",
+    ]
   },
   "launchOption.currentConfig": {
     "BuildType": {
       "CMAKE_BUILD_TYPE": "Release",
       "BUILD_PREFIX": "rel"
     },
-    "Test": "test5"
+    "Test": "tests/benchmark"
   },
   "externalConsole": true,
   "files.associations": {

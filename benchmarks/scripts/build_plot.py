@@ -1,14 +1,15 @@
 import matplotlib.pyplot as plt
 import csv
 import sys
+from ast import literal_eval as make_tuple
 
 Count = []
 file = sys.argv[1]
 comment = sys.argv[2]
 
-InterstingCollumns = (3, 6, 9, 10, 11, 14, 17)
+InterstingCollumns = make_tuple(sys.argv[3])
 CollumnsName = []
-Collumns = ([], [], [], [], [], [], [])
+Collumns = tuple([] for i in range(len(InterstingCollumns)))
 
 
 with open(f'{file}.csv', 'r') as datafile:

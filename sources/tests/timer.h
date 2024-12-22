@@ -14,12 +14,17 @@ struct Timer
   // return delta time in milliseconds
   float stop()
   {
-    auto end = std::chrono::high_resolution_clock::now();
-    // print delta time in milliseconds
-    float delta = std::chrono::duration<float, std::milli>(end - start).count();
-    printf("%s : (%f ns)\n", label, delta);
+    float delta = get_time();
+    printf("%s : (%f ms)\n", label, delta);
     stopped = true;
     return delta;
+  }
+
+  float get_time()
+  {
+    // print delta time in milliseconds
+    auto end = std::chrono::high_resolution_clock::now();
+    return std::chrono::duration<float, std::milli>(end - start).count();
   }
 
   ~Timer()

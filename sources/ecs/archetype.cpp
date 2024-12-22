@@ -67,14 +67,14 @@ void Archetype::add_entity(const TypeDeclarationMap &type_map, const Initializer
     auto it = override_list.args.find(collumn.componentId);
     if (it != override_list.args.end())
     {
-      typeDeclaration->move_construct(collumn.get_data(entityCount), it->second.data);
+      typeDeclaration->move_construct(collumn.get_data(entityCount), it->second.data());
       continue;
     }
     // then check initialization data in template_init and copy it
     auto it2 = template_init.args.find(collumn.componentId);
     if (it2 != template_init.args.end())
     {
-      typeDeclaration->copy_construct(collumn.get_data(entityCount), it2->second.data);
+      typeDeclaration->copy_construct(collumn.get_data(entityCount), it2->second.data());
       continue;
     }
     // if there is no initialization data, construct default
@@ -100,7 +100,7 @@ void Archetype::add_entities(const TypeDeclarationMap &type_map, const Initializ
       ComponentDataSoa &componentDataSoa = it->second;
       for (int i = 0; i < requiredEntityCount; i++)
       {
-        typeDeclaration->move_construct(collumn.get_data(entityCount + i), componentDataSoa.data[i]);
+        typeDeclaration->move_construct(collumn.get_data(entityCount + i), componentDataSoa.get_data(i));
       }
       continue;
     }
@@ -111,7 +111,7 @@ void Archetype::add_entities(const TypeDeclarationMap &type_map, const Initializ
       const ComponentData &componentData = it2->second;
       for (int i = 0; i < requiredEntityCount; i++)
       {
-        typeDeclaration->copy_construct(collumn.get_data(entityCount + i), componentData.data);
+        typeDeclaration->copy_construct(collumn.get_data(entityCount + i), componentData.data());
       }
       continue;
     }

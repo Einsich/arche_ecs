@@ -39,6 +39,7 @@ struct TypeDeclaration
   TypeId typeId;
   uint32_t sizeOfElement;
   uint32_t alignmentOfElement;
+  bool isTriviallyRelocatable;
 
   DefaultConstructor construct_default;
   Destructor destruct;
@@ -68,6 +69,7 @@ TypeDeclaration create_type_declaration()
   TypeDeclaration type_declaration;
   type_declaration.typeName = ecs::TypeInfo<T>::typeName;
   type_declaration.typeId = ecs::TypeInfo<T>::typeId;
+  type_declaration.isTriviallyRelocatable = ecs::TypeInfo<T>::isTriviallyRelocatable;
   type_declaration.sizeOfElement = sizeof(T);
   type_declaration.alignmentOfElement = alignof(T);
   type_declaration.construct_default = construct_default<T>;
@@ -89,15 +91,28 @@ TypeId type_registration(TypeDeclarationMap &type_map)
 template<typename T>
 struct TypeInfo;
 
-#define ECS_TYPE_DECLARATION_ALIAS(CPP_TYPE, STRING_ALIAS) \
+#define ECS_TYPE_DECLARATION_VERBOSE(CPP_TYPE, STRING_ALIAS, IS_TRIVIALLY_RELOCATABLE) \
   template<> \
   struct ecs::TypeInfo<CPP_TYPE> \
   { \
     static constexpr ecs::TypeId typeId = ecs::hash(STRING_ALIAS); \
     static constexpr const char *typeName = STRING_ALIAS; \
+    static constexpr bool isTriviallyRelocatable = IS_TRIVIALLY_RELOCATABLE; \
   };
 
-#define ECS_TYPE_DECLARATION(CPP_TYPE) ECS_TYPE_DECLARATION_ALIAS(CPP_TYPE, #CPP_TYPE)
+template<typename T>
+struct is_trivially_relocatable
+{
+  static constexpr bool value = sizeof(T) < 1024;
+};
+
+#define ECS_TYPE_DECLARATION(CPP_TYPE) ECS_TYPE_DECLARATION_VERBOSE(CPP_TYPE, #CPP_TYPE, is_trivially_relocatable<CPP_TYPE>::value)
+#define ECS_RELOCATABLE_TYPE_DECLARATION(CPP_TYPE) ECS_TYPE_DECLARATION_VERBOSE(CPP_TYPE, #CPP_TYPE, true)
+#define ECS_NON_RELOCATABLE_TYPE_DECLARATION(CPP_TYPE) ECS_TYPE_DECLARATION_VERBOSE(CPP_TYPE, #CPP_TYPE, false)
+
+#define ECS_TYPE_DECLARATION_ALIAS(CPP_TYPE, STRING_ALIAS) ECS_TYPE_DECLARATION_VERBOSE(CPP_TYPE, STRING_ALIAS, is_trivially_relocatable<CPP_TYPE>::value)
+#define ECS_RELOCATABLE_TYPE_DECLARATION_ALIAS(CPP_TYPE, STRING_ALIAS) ECS_TYPE_DECLARATION_VERBOSE(CPP_TYPE, STRING_ALIAS, true)
+#define ECS_NON_RELOCATABLE_TYPE_DECLARATION_ALIAS(CPP_TYPE, STRING_ALIAS) ECS_TYPE_DECLARATION_VERBOSE(CPP_TYPE, STRING_ALIAS, false)
 
 struct TypeDeclarationInfo final : public TypeDeclaration
 {

@@ -35,7 +35,7 @@ struct EcsManager
     eidComponentId = ecs::get_or_add_component(componentMap, EntityIdTypeId, "eid");
   }
 
-  ecs::EntityId create_entity(ArchetypeId archetypeId, const InitializerList &template_init, InitializerList override_list)
+  ecs::EntityId create_entity(ArchetypeId archetypeId, const InitializerList &template_init, InitializerList &&override_list)
   {
     auto it = archetypeMap.find(archetypeId);
     if (it == archetypeMap.end())
@@ -52,7 +52,7 @@ struct EcsManager
     archetype.add_entity(typeMap, template_init, std::move(override_list));
     return eid;
   }
-  ecs::EntityId create_entity(TemplateId templateId, InitializerList init_list = {})
+  ecs::EntityId create_entity(TemplateId templateId, InitializerList &&init_list = {})
   {
     auto it = templates.find(templateId);
     if (it == templates.end())

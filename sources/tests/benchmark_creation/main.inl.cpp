@@ -1,5 +1,5 @@
-#include "main.inl"
 #include <ecs/query_iteration.h>
+#include "main.inl"
 //Code-generator production
 
 static void ecs_registration(ecs::EcsManager &mgr)

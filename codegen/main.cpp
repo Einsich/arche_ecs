@@ -398,6 +398,31 @@ void write(std::ofstream &outFile, const char *fmt, ...)
 }
 
 
+static void query_forward_declaration(std::ofstream &outFile, const std::vector<ParserSystemDescription> &descr)
+{
+  for (auto &query : descr)
+  {
+    const char *name = query.sys_name.c_str();
+    write(outFile,
+          "template<typename Callable>\n"
+          "static void %s(ecs::EcsManager &mgr, Callable &&query_function);\n\n",
+          name);
+  }
+}
+
+
+static void single_query_forward_declaration(std::ofstream &outFile, const std::vector<ParserSystemDescription> &descr)
+{
+  for (auto &query : descr)
+  {
+    const char *name = query.sys_name.c_str();
+    write(outFile,
+          "template<typename Callable>\n"
+          "static void %s(ecs::EcsManager &mgr, ecs::EntityId eid, Callable &&query_function);\n\n",
+          name);
+  }
+}
+
 static void query_definition(std::ofstream &outFile, const std::vector<ParserSystemDescription> &descr)
 {
   for (auto &query : descr)
@@ -659,7 +684,7 @@ void process_inl_file(const fs::path &path, const fs::path &root)
 
   std::vector<ParserSystemDescription> systemsDescriptions;
   std::vector<ParserSystemDescription> queriesDescriptions;
-  std::vector<ParserSystemDescription> singlqueriesDescriptions;
+  std::vector<ParserSystemDescription> singleQueriesDescriptions;
   std::vector<ParserSystemDescription> eventsDescriptions;
   std::vector<ParserSystemDescription> requestDescriptions;
   std::string pathStr = path.string();
@@ -669,19 +694,21 @@ void process_inl_file(const fs::path &path, const fs::path &root)
 
   parse_system(systemsDescriptions, str, fileInfo, system_full_regex, system_regex);
   parse_system(queriesDescriptions, str, fileInfo, query_full_regex, query_regex);
-  parse_system(singlqueriesDescriptions, str, fileInfo, singl_query_full_regex, query_regex);
+  parse_system(singleQueriesDescriptions, str, fileInfo, singl_query_full_regex, query_regex);
   parse_system(eventsDescriptions, str, fileInfo, event_full_regex, event_regex);
   parse_system(requestDescriptions, str, fileInfo, request_full_regex, request_regex);
 
   std::ofstream outFile;
   outFile.open(pathStr + ".cpp", std::ios::out);
-  outFile << "#include " << path.filename() << "\n";
   outFile << "#include <ecs/query_iteration.h>\n";
+  query_forward_declaration(outFile, queriesDescriptions);
+  single_query_forward_declaration(outFile, singleQueriesDescriptions);
+  outFile << "#include " << path.filename() << "\n";
   outFile << "//Code-generator production\n\n";
 
 
   query_definition(outFile, queriesDescriptions);
-  single_query_definition(outFile, singlqueriesDescriptions);
+  single_query_definition(outFile, singleQueriesDescriptions);
   system_definition(outFile, systemsDescriptions);
   event_definition(outFile, eventsDescriptions);
   request_definition(outFile, requestDescriptions);
@@ -690,7 +717,7 @@ void process_inl_file(const fs::path &path, const fs::path &root)
   outFile << "static void ecs_registration(ecs::EcsManager &mgr)\n{\n";
 
   register_queries(outFile, queriesDescriptions);
-  register_queries(outFile, singlqueriesDescriptions);
+  register_queries(outFile, singleQueriesDescriptions);
   register_systems(outFile, systemsDescriptions);
   register_events(outFile, eventsDescriptions);
   register_requests(outFile, requestDescriptions);

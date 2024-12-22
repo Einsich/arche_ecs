@@ -1,5 +1,14 @@
-#include "main.inl"
 #include <ecs/query_iteration.h>
+template<typename Callable>
+static void query_perf_test1(ecs::EcsManager &mgr, Callable &&query_function);
+
+template<typename Callable>
+static void query_perf_test2(ecs::EcsManager &mgr, Callable &&query_function);
+
+template<typename Callable>
+static void query_perf_test3(ecs::EcsManager &mgr, Callable &&query_function);
+
+#include "main.inl"
 //Code-generator production
 
 template<typename Callable>

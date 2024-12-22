@@ -410,13 +410,6 @@ ECS_SYSTEM() system_perf_test3(float3 &position, float3 &velocity, const float3 
   position = position + velocity * dt;
 }
 
-template<typename Callable>
-static void query_perf_test1(ecs::EcsManager &, Callable &&);
-template<typename Callable>
-static void query_perf_test2(ecs::EcsManager &, Callable &&);
-template<typename Callable>
-static void query_perf_test3(ecs::EcsManager &, Callable &&);
-
 void query_perf_test1(ecs::EcsManager &mgr)
 {
   ECS_QUERY() query_perf_test1(mgr, [](float3 &position)

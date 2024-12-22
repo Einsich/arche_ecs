@@ -1,11 +1,17 @@
-#include "main.inl"
 #include <ecs/query_iteration.h>
+template<typename Callable>
+static void print_name_query(ecs::EcsManager &mgr, Callable &&query_function);
+
+template<typename Callable>
+static void print_name_by_eid_query(ecs::EcsManager &mgr, ecs::EntityId eid, Callable &&query_function);
+
+#include "main.inl"
 //Code-generator production
 
 template<typename Callable>
 static void print_name_query(ecs::EcsManager &mgr, Callable &&query_function)
 {
-  constexpr ecs::NameHash queryHash = ecs::hash("sources/tests/unit_tests/main.inl:38[print_name_query]");
+  constexpr ecs::NameHash queryHash = ecs::hash("sources/tests/unit_tests/main.inl:41[print_name_query]");
   const int N = 2;
   ecs::call_query<N, const std::string*, ecs::PrtWrapper<int>>(mgr, queryHash, std::move(query_function));
 }
@@ -34,7 +40,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
 {
   {
     ecs::Query query;
-    query.uniqueName = "sources/tests/unit_tests/main.inl:38[print_name_query]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:41[print_name_query]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
@@ -68,7 +74,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
   }
   {
     ecs::System query;
-    query.uniqueName = "sources/tests/unit_tests/main.inl:22[update]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:28[update]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
@@ -87,7 +93,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
   }
   {
     ecs::System query;
-    query.uniqueName = "sources/tests/unit_tests/main.inl:28[print_name]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:34[print_name]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {

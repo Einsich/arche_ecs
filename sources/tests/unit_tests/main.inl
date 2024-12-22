@@ -36,9 +36,6 @@ ECS_SYSTEM() print_name(const std::string &name, float3 position, int *health)
   printf("print_name [%s] (%f %f %f), %d\n", name.c_str(), position.x, position.y, position.z, health ? *health : -1);
 }
 
-template<typename Callable>
-static void print_name_query(ecs::EcsManager &, Callable &&);
-
 void query_test(ecs::EcsManager &mgr)
 {
   ECS_QUERY() print_name_query(mgr, [](const std::string &name, int *health)
@@ -46,9 +43,6 @@ void query_test(ecs::EcsManager &mgr)
     printf("print_name [%s] %d\n", name.c_str(), health ? *health : -1);
   });
 }
-
-template<typename Callable>
-static void print_name_by_eid_query(ecs::EcsManager &, ecs::EntityId, Callable &&);
 
 void query_by_eid_test(ecs::EcsManager &mgr, const std::vector<ecs::EntityId> &eids)
 {

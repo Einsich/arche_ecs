@@ -28,6 +28,8 @@ struct Archetype
 
   uint32_t entityCount = 0;
   uint32_t chunkSize = 0;
+  uint32_t chunkSizePower = 0;
+  uint32_t chunkMask = 0;
   uint32_t capacity = 0;
   uint32_t chunkCount = 0;
 

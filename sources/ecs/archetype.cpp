@@ -40,6 +40,8 @@ Archetype::Archetype(const TypeDeclarationMap &type_map, ArchetypeId archetype_i
     componentToCollumnIndex[componentId] = collumns.size() - 1;
   }
   chunkSize = collumns[0].chunkSize;
+  chunkSizePower = collumns[0].chunkSizePower;
+  chunkMask = collumns[0].chunkMask;
 }
 
 void Archetype::try_add_chunk(int requiredEntityCount)

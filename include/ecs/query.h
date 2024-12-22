@@ -11,7 +11,7 @@ using ToComponentMap = std::vector<std::vector<char *> *>;
 struct ArchetypeRecord
 {
   Archetype *archetype = nullptr;
-  ArchetypeId archetypeId = 0;
+  // ArchetypeId archetypeId = 0;
   ToComponentMap toComponentIndex;
 };
 
@@ -70,12 +70,12 @@ struct Query
       toComponentIndex.push_back(componentIndex >= 0 ? (std::vector<char *> *)&(archetype->collumns[componentIndex].chunks) : nullptr);
     }
 
-    archetypesCache.push_back({(Archetype *)archetype, archetype->archetypeId, std::move(toComponentIndex)});
+    archetypesCache.insert({archetype->archetypeId, {(Archetype *)archetype, std::move(toComponentIndex)}});
 
     return true;
   }
 
-  std::vector<ArchetypeRecord> archetypesCache;
+   ska::flat_hash_map<ArchetypeId, ArchetypeRecord> archetypesCache;
 };
 
 struct System final : public Query

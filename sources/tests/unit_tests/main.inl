@@ -19,6 +19,12 @@ ECS_TYPE_DECLARATION(int)
 ECS_TYPE_DECLARATION(float3)
 ECS_TYPE_DECLARATION_ALIAS(std::string, "string")
 
+
+ECS_TYPE_REGISTRATION(int)
+ECS_TYPE_REGISTRATION(float3)
+ECS_TYPE_REGISTRATION(std::string)
+
+
 ECS_SYSTEM() update(ecs::EntityId eid, float3 &position, const float3 &velocity)
 {
   printf("update [%d/%d] (%f %f %f), (%f %f %f)\n", eid.entityIndex, eid.generation, position.x, position.y, position.z, velocity.x, velocity.y, velocity.z);
@@ -39,6 +45,20 @@ void query_test(ecs::EcsManager &mgr)
   {
     printf("print_name [%s] %d\n", name.c_str(), health ? *health : -1);
   });
+}
+
+template<typename Callable>
+static void print_name_by_eid_query(ecs::EcsManager &, ecs::EntityId, Callable &&);
+
+void query_by_eid_test(ecs::EcsManager &mgr, const std::vector<ecs::EntityId> &eids)
+{
+  for (ecs::EntityId eid : eids)
+  {
+    ECS_QUERY() print_name_by_eid_query(mgr, eid, [](const std::string &name, int *health)
+    {
+      printf("print_name_by_eid [%s] %d\n", name.c_str(), health ? *health : -1);
+    });
+  }
 }
 
 int main()
@@ -213,6 +233,17 @@ int main()
   }
   query_test(mgr);
 
+  std::vector<ecs::EntityId> allEids;
+
+  for (int i = 0, n = mgr.entityContainer.entityRecords.size(); i < n; i++)
+  {
+    ecs::EntityId &eid = allEids.emplace_back();
+    eid.entityIndex = i;
+    eid.generation = mgr.entityContainer.entityRecords[i].generation;
+  }
+
+
+  query_by_eid_test(mgr, allEids);
 
   return 0;
 }

@@ -6,11 +6,16 @@ template<typename Callable>
 static void print_name_query(ecs::EcsManager &mgr, Callable &&query_function)
 {
   constexpr ecs::NameHash queryHash = ecs::hash("sources/tests/unit_tests/main.inl:38[print_name_query]");
-  ecs::call_query(mgr, queryHash, [&](ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)
-  {
-    const int N = 2;
-    ecs::templated_archetype_iterate<N, const std::string*, ecs::PrtWrapper<int>>(archetype, to_archetype_component, std::move(query_function), std::make_index_sequence<N>());
-  });
+  const int N = 2;
+  ecs::call_query<N, const std::string*, ecs::PrtWrapper<int>>(mgr, queryHash, std::move(query_function));
+}
+
+template<typename Callable>
+static void print_name_by_eid_query(ecs::EcsManager &mgr, ecs::EntityId eid, Callable &&query_function)
+{
+  constexpr ecs::NameHash queryHash = ecs::hash("sources/tests/unit_tests/main.inl:51[print_name_by_eid_query]");
+  const int N = 2;
+  ecs::call_query<N, const std::string*, ecs::PrtWrapper<int>>(mgr, eid, queryHash, std::move(query_function));
 }
 
 static void update_implementation(ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)
@@ -30,6 +35,23 @@ static void ecs_registration(ecs::EcsManager &mgr)
   {
     ecs::Query query;
     query.uniqueName = "sources/tests/unit_tests/main.inl:38[print_name_query]";
+    query.nameHash = ecs::hash(query.uniqueName.c_str());
+    query.querySignature =
+    {
+      {ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<std::string>::typeId, "name"), ecs::Query::ComponentAccess::READ_ONLY},
+      {ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<int>::typeId, "health"), ecs::Query::ComponentAccess::READ_WRITE_OPTIONAL}
+    };
+    query.requireComponents =
+    {
+    };
+    query.excludeComponents =
+    {
+    };
+    ecs::register_query(mgr, std::move(query));
+  }
+  {
+    ecs::Query query;
+    query.uniqueName = "sources/tests/unit_tests/main.inl:51[print_name_by_eid_query]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {

@@ -365,19 +365,6 @@ void parse_system(std::vector<ParserSystemDescription> &systemsDescriptions,
   }
 }
 
-void template_arguments(std::ofstream &outFile, const std::vector<ParserFunctionArgument> &args)
-{
-  for (uint i = 0; i < args.size(); i++)
-  {
-    auto &arg = args[i];
-    snprintf(buffer, bufferSize, "%s%s%s%s",
-             arg.is_const ? "const " : "",
-             arg.type.c_str(), arg.optional ? "*" : (arg.reference ? "&" : ""),
-             i + 1 == (uint)args.size() ? "" : ", ");
-    outFile << buffer;
-  }
-}
-
 void template_query_types(std::ofstream &outFile, const std::vector<ParserFunctionArgument> &args)
 {
   for (uint i = 0; i < args.size(); i++)
@@ -410,13 +397,6 @@ void write(std::ofstream &outFile, const char *fmt, ...)
   outFile << buffer;
 }
 
-static void declare_caches(std::ofstream &/* outFile */, const std::vector<ParserSystemDescription> &/* descr */)
-{
-  // for (auto &query : descr)
-  // {
-  //   outFile << "static ecs::QueryCache " << query.sys_name << "__cache__;\n\n";
-  // }
-}
 
 static void query_definition(std::ofstream &outFile, const std::vector<ParserSystemDescription> &descr)
 {
@@ -428,15 +408,12 @@ static void query_definition(std::ofstream &outFile, const std::vector<ParserSys
           "static void %s(ecs::EcsManager &mgr, Callable &&query_function)\n"
           "{\n"
           "  constexpr ecs::NameHash queryHash = ecs::hash(\"%s\");\n"
-          "  ecs::call_query(mgr, queryHash, [&](ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)\n"
-          "  {\n"
-          "    const int N = %d;\n"
-          "    ecs::templated_archetype_iterate<N, ",
+          "  const int N = %d;\n"
+          "  ecs::call_query<N, ",
           name, query.unique_name.c_str(), query.args.size());
     template_query_types(outFile, query.args);
     write(outFile,
-          ">(archetype, to_archetype_component, std::move(query_function), std::make_index_sequence<N>());\n"
-          "  });\n"
+          ">(mgr, queryHash, std::move(query_function));\n"
           "}\n\n");
   }
 }
@@ -448,15 +425,16 @@ static void single_query_definition(std::ofstream &outFile, const std::vector<Pa
     const char *name = query.sys_name.c_str();
     write(outFile,
           "template<typename Callable>\n"
-          "static void %s(ecs::EntityId eid, Callable lambda)\n"
+          "static void %s(ecs::EcsManager &mgr, ecs::EntityId eid, Callable &&query_function)\n"
           "{\n"
-          "  ecs::perform_query<",
-          name);
-    template_arguments(outFile, query.args);
+          "  constexpr ecs::NameHash queryHash = ecs::hash(\"%s\");\n"
+          "  const int N = %d;\n"
+          "  ecs::call_query<N, ",
+          name, query.unique_name.c_str(), query.args.size());
+    template_query_types(outFile, query.args);
     write(outFile,
-          ">(%s__cache__, eid, lambda);\n"
-          "}\n\n",
-          name);
+          ">(mgr, eid, queryHash, std::move(query_function));\n"
+          "}\n\n");
   }
 }
 
@@ -701,11 +679,6 @@ void process_inl_file(const fs::path &path, const fs::path &root)
   outFile << "#include <ecs/query_iteration.h>\n";
   outFile << "//Code-generator production\n\n";
 
-  declare_caches(outFile, queriesDescriptions);
-  declare_caches(outFile, singlqueriesDescriptions);
-  declare_caches(outFile, systemsDescriptions);
-  declare_caches(outFile, eventsDescriptions);
-  declare_caches(outFile, requestDescriptions);
 
   query_definition(outFile, queriesDescriptions);
   single_query_definition(outFile, singlqueriesDescriptions);

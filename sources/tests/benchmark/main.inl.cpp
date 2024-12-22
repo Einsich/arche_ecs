@@ -6,33 +6,24 @@ template<typename Callable>
 static void query_perf_test1(ecs::EcsManager &mgr, Callable &&query_function)
 {
   constexpr ecs::NameHash queryHash = ecs::hash("sources/tests/benchmark/main.inl:422[query_perf_test1]");
-  ecs::call_query(mgr, queryHash, [&](ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)
-  {
-    const int N = 1;
-    ecs::templated_archetype_iterate<N, float3*>(archetype, to_archetype_component, std::move(query_function), std::make_index_sequence<N>());
-  });
+  const int N = 1;
+  ecs::call_query<N, float3*>(mgr, queryHash, std::move(query_function));
 }
 
 template<typename Callable>
 static void query_perf_test2(ecs::EcsManager &mgr, Callable &&query_function)
 {
   constexpr ecs::NameHash queryHash = ecs::hash("sources/tests/benchmark/main.inl:430[query_perf_test2]");
-  ecs::call_query(mgr, queryHash, [&](ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)
-  {
-    const int N = 2;
-    ecs::templated_archetype_iterate<N, float3*, const float3*>(archetype, to_archetype_component, std::move(query_function), std::make_index_sequence<N>());
-  });
+  const int N = 2;
+  ecs::call_query<N, float3*, const float3*>(mgr, queryHash, std::move(query_function));
 }
 
 template<typename Callable>
 static void query_perf_test3(ecs::EcsManager &mgr, Callable &&query_function)
 {
   constexpr ecs::NameHash queryHash = ecs::hash("sources/tests/benchmark/main.inl:438[query_perf_test3]");
-  ecs::call_query(mgr, queryHash, [&](ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)
-  {
-    const int N = 3;
-    ecs::templated_archetype_iterate<N, float3*, float3*, const float3*>(archetype, to_archetype_component, std::move(query_function), std::make_index_sequence<N>());
-  });
+  const int N = 3;
+  ecs::call_query<N, float3*, float3*, const float3*>(mgr, queryHash, std::move(query_function));
 }
 
 static void system_perf_test1_implementation(ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)

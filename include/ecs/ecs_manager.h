@@ -147,7 +147,7 @@ inline TemplateId template_registration(EcsManager &manager, const char *_name, 
 
 inline void perform_system(const System &system)
 {
-  for (const auto &archetypeRecord : system.archetypesCache)
+  for (const auto &[archetypeId, archetypeRecord] : system.archetypesCache)
   {
     system.update_archetype(*archetypeRecord.archetype, archetypeRecord.toComponentIndex);
   }

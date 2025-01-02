@@ -69,7 +69,7 @@ struct ParserSystemDescription
 {
   std::string sys_file, sys_name, unique_name;
   std::vector<ParserFunctionArgument> args, req_args, req_not_args;
-  std::vector<std::string> before, after, tags;
+  std::vector<std::string> before, after, tags, on_event;
   std::string stage;
   std::string isJob;
 };
@@ -291,6 +291,11 @@ void parse_definition(Match &str, ParserSystemDescription &parserDescr)
           for (uint i = 1; i < args0.size(); i++)
             parserDescr.req_not_args.emplace_back(clear_arg(args0[i].get()));
         }
+        else if (key == "on_event")
+        {
+          for (uint i = 1; i < args0.size(); i++)
+            parserDescr.on_event.emplace_back(args0[i].get());
+        }
         else if (key == "job")
         {
           parserDescr.isJob = args0[1].get();
@@ -365,9 +370,9 @@ void parse_system(std::vector<ParserSystemDescription> &systemsDescriptions,
   }
 }
 
-void template_query_types(std::ofstream &outFile, const std::vector<ParserFunctionArgument> &args)
+void template_query_types(std::ofstream &outFile, const ParserFunctionArgument *args, size_t args_count)
 {
-  for (uint i = 0; i < args.size(); i++)
+  for (uint i = 0; i < args_count; i++)
   {
     auto &arg = args[i];
     if (!arg.optional)
@@ -375,14 +380,14 @@ void template_query_types(std::ofstream &outFile, const std::vector<ParserFuncti
       snprintf(buffer, bufferSize, "%s%s%s%s",
               arg.is_const ? "const " : "",
               arg.type.c_str(), "*",
-              i + 1 == (uint)args.size() ? "" : ", ");
+              i + 1 == args_count ? "" : ", ");
     }
     else
     {
       snprintf(buffer, bufferSize, "ecs::PrtWrapper<%s%s>%s",
               arg.is_const ? "const " : "",
               arg.type.c_str(),
-              i + 1 == (uint)args.size() ? "" : ", ");
+              i + 1 == args_count ? "" : ", ");
     }
     outFile << buffer;
   }
@@ -436,7 +441,7 @@ static void query_definition(std::ofstream &outFile, const std::vector<ParserSys
           "  const int N = %d;\n"
           "  ecs::call_query<N, ",
           name, query.unique_name.c_str(), query.args.size());
-    template_query_types(outFile, query.args);
+    template_query_types(outFile, query.args.data(), query.args.size());
     write(outFile,
           ">(mgr, queryHash, std::move(query_function));\n"
           "}\n\n");
@@ -456,7 +461,7 @@ static void single_query_definition(std::ofstream &outFile, const std::vector<Pa
           "  const int N = %d;\n"
           "  ecs::call_query<N, ",
           name, query.unique_name.c_str(), query.args.size());
-    template_query_types(outFile, query.args);
+    template_query_types(outFile, query.args.data(), query.args.size());
     write(outFile,
           ">(mgr, eid, queryHash, std::move(query_function));\n"
           "}\n\n");
@@ -474,7 +479,7 @@ static void system_definition(std::ofstream &outFile, const std::vector<ParserSy
           "  const int N = %d;\n"
           "  ecs::templated_archetype_iterate<N, ",
           name, query.args.size());
-    template_query_types(outFile, query.args);
+    template_query_types(outFile, query.args.data(), query.args.size());
     write(outFile,
           ">(archetype, to_archetype_component, %s, std::make_index_sequence<N>());\n"
           "}\n\n", name);
@@ -487,18 +492,42 @@ static void event_definition(std::ofstream &outFile, const std::vector<ParserSys
   {
     const char *name = query.sys_name.c_str();
     const char *event_type = query.args[0].type.c_str();
+    const bool isAbstractEvent = query.args[0].type == "ecs::Event";
     write(outFile,
-          "static void %s_handler(const ecs::Event &event)\n"
+          "static void %s_broadcast_event(ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component, ecs::EventId event_id, const void *event_ptr)\n"
           "{\n"
-          "  ecs::perform_event(reinterpret_cast<const %s &>(event), %s__cache__, %s);\n"
-          "}\n\n",
-          name, event_type, name, name);
+          "  ECS_UNUSED(event_id);\n"
+          "  const int N = %d;\n"
+          "  ecs::templated_event_archetype_iterate<N, ",
+          name, query.args.size() - 1);
+    template_query_types(outFile, query.args.data() + 1, query.args.size() - 1);
+
+    if (isAbstractEvent)
+      write(outFile,
+          ">(archetype, to_archetype_component, ecs::Event(event_id, event_ptr), %s, std::make_index_sequence<N>());\n"
+          "}\n\n", name);
+    else
+      write(outFile,
+          ">(archetype, to_archetype_component, *(const %s *)event_ptr, %s, std::make_index_sequence<N>());\n"
+          "}\n\n", event_type, name);
+
     write(outFile,
-          "static void %s_single_handler(ecs::EntityId eid, const ecs::Event &event)\n"
+          "static void %s_unicast_event(ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component, uint32_t component_idx, ecs::EventId event_id, const void *event_ptr)\n"
           "{\n"
-          "  ecs::perform_event(eid, reinterpret_cast<const %s &>(event), %s__cache__, %s);\n"
-          "}\n\n",
-          name, event_type, name, name);
+          "  ECS_UNUSED(event_id);\n"
+          "  const int N = %d;\n"
+          "  ecs::templated_archetype_event_one_entity<N, ",
+          name, query.args.size() - 1);
+    template_query_types(outFile, query.args.data() + 1, query.args.size() - 1);
+
+    if (isAbstractEvent)
+      write(outFile,
+          ">(archetype, to_archetype_component, component_idx, ecs::Event(event_id, event_ptr), %s, std::make_index_sequence<N>());\n"
+          "}\n\n", name);
+    else
+      write(outFile,
+          ">(archetype, to_archetype_component, component_idx, *(const %s *)event_ptr, %s, std::make_index_sequence<N>());\n"
+          "}\n\n", event_type, name);
   }
 }
 
@@ -620,7 +649,7 @@ void register_systems(std::ofstream &outFile, const std::vector<ParserSystemDesc
   for (auto &query : descr)
   {
     const char *name = query.sys_name.c_str();
-    fill_common_query_part(outFile, query,  "ecs::System",false);
+    fill_common_query_part(outFile, query, "ecs::System", false);
 
     write(outFile,
           "    query.update_archetype = %s_implementation;\n",
@@ -640,15 +669,40 @@ void register_events(std::ofstream &outFile, const std::vector<ParserSystemDescr
   {
     const char *name = query.sys_name.c_str();
     const char *event_type = query.args[0].type.c_str();
-    fill_common_query_part(outFile, query,  "ecs::Event",true);
-    fill_string_array(outFile, query.before);
-    fill_string_array(outFile, query.after);
-    fill_string_array(outFile, query.tags);
-    fill_query_end(outFile, "ecs::register_event");
+    const bool isAbstractEvent = query.args[0].type == "ecs::Event";
+
+    fill_common_query_part(outFile, query, "ecs::EventHandler", true);
     write(outFile,
-          "  &%s_handler, &%s_single_handler,\n"
-          "  ecs::EventIndex<%s>::value);\n\n",
+          "    query.broadcastEvent = %s_broadcast_event;\n"
+          "    query.unicastEvent = %s_unicast_event;\n",
           name, name, event_type);
+    if (isAbstractEvent)
+    {
+        write(outFile,
+          "    query.eventIds = {");
+      for (uint i = 0; i < query.on_event.size(); i++)
+      {
+        write(outFile,
+              "ecs::EventInfo<%s>::eventId, ",
+              query.on_event[i].c_str());
+      }
+      write(outFile, "};\n");
+    }
+    else
+    {
+      write(outFile,
+          "    query.eventIds = {ecs::EventInfo<%s>::eventId};\n",
+          event_type);
+    }
+
+    // fill_string_array(outFile, query.before);
+    // fill_string_array(outFile, query.after);
+    // fill_string_array(outFile, query.tags);
+    // write(outFile,
+    //       "  &%s_handler, &%s_single_handler,\n"
+    //       "  ecs::EventIndex<%s>::value);\n\n",
+    //       name, name, event_type);
+    fill_query_end(outFile, "ecs::register_event");
   }
 }
 
@@ -714,7 +768,9 @@ void process_inl_file(const fs::path &path, const fs::path &root)
   request_definition(outFile, requestDescriptions);
 
   std::string fileName = path.stem().string();
-  outFile << "static void ecs_registration(ecs::EcsManager &mgr)\n{\n";
+  outFile << "static void ecs_registration(ecs::EcsManager &mgr)\n"
+             "{\n"
+             "  ECS_UNUSED(mgr);\n";
 
   register_queries(outFile, queriesDescriptions);
   register_queries(outFile, singleQueriesDescriptions);

@@ -13,5 +13,8 @@ namespace ecs
   using NameHash = uint32_t;
   using ArchetypeId = uint32_t;
   using TemplateId = uint32_t;
+  using EventId = uint32_t;
+
+  #define ECS_UNUSED(x) (void)(x)
 
 }

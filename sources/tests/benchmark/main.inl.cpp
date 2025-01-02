@@ -14,7 +14,7 @@ static void query_perf_test3(ecs::EcsManager &mgr, Callable &&query_function);
 template<typename Callable>
 static void query_perf_test1(ecs::EcsManager &mgr, Callable &&query_function)
 {
-  constexpr ecs::NameHash queryHash = ecs::hash("sources/tests/benchmark/main.inl:422[query_perf_test1]");
+  constexpr ecs::NameHash queryHash = ecs::hash("sources/tests/benchmark/main.inl:415[query_perf_test1]");
   const int N = 1;
   ecs::call_query<N, float3*>(mgr, queryHash, std::move(query_function));
 }
@@ -22,7 +22,7 @@ static void query_perf_test1(ecs::EcsManager &mgr, Callable &&query_function)
 template<typename Callable>
 static void query_perf_test2(ecs::EcsManager &mgr, Callable &&query_function)
 {
-  constexpr ecs::NameHash queryHash = ecs::hash("sources/tests/benchmark/main.inl:430[query_perf_test2]");
+  constexpr ecs::NameHash queryHash = ecs::hash("sources/tests/benchmark/main.inl:423[query_perf_test2]");
   const int N = 2;
   ecs::call_query<N, float3*, const float3*>(mgr, queryHash, std::move(query_function));
 }
@@ -30,7 +30,7 @@ static void query_perf_test2(ecs::EcsManager &mgr, Callable &&query_function)
 template<typename Callable>
 static void query_perf_test3(ecs::EcsManager &mgr, Callable &&query_function)
 {
-  constexpr ecs::NameHash queryHash = ecs::hash("sources/tests/benchmark/main.inl:438[query_perf_test3]");
+  constexpr ecs::NameHash queryHash = ecs::hash("sources/tests/benchmark/main.inl:431[query_perf_test3]");
   const int N = 3;
   ecs::call_query<N, float3*, float3*, const float3*>(mgr, queryHash, std::move(query_function));
 }
@@ -55,9 +55,10 @@ static void system_perf_test3_implementation(ecs::Archetype &archetype, const ec
 
 static void ecs_registration(ecs::EcsManager &mgr)
 {
+  ECS_UNUSED(mgr);
   {
     ecs::Query query;
-    query.uniqueName = "sources/tests/benchmark/main.inl:422[query_perf_test1]";
+    query.uniqueName = "sources/tests/benchmark/main.inl:415[query_perf_test1]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
@@ -73,7 +74,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
   }
   {
     ecs::Query query;
-    query.uniqueName = "sources/tests/benchmark/main.inl:430[query_perf_test2]";
+    query.uniqueName = "sources/tests/benchmark/main.inl:423[query_perf_test2]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
@@ -90,7 +91,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
   }
   {
     ecs::Query query;
-    query.uniqueName = "sources/tests/benchmark/main.inl:438[query_perf_test3]";
+    query.uniqueName = "sources/tests/benchmark/main.inl:431[query_perf_test3]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {

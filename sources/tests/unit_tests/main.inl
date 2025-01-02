@@ -55,6 +55,40 @@ void query_by_eid_test(ecs::EcsManager &mgr, const std::vector<ecs::EntityId> &e
   }
 }
 
+struct UpdateEvent
+{
+
+};
+
+ECS_EVENT_DECLARATION(UpdateEvent)
+
+struct HeavyEvent
+{
+  std::vector<int> data;
+};
+
+ECS_EVENT_DECLARATION(HeavyEvent)
+
+ECS_EVENT() update_event(const UpdateEvent &, ecs::EntityId eid, float3 &position, const float3 &velocity)
+{
+  printf("update_event [%d/%d] (%f %f %f), (%f %f %f)\n", eid.entityIndex, eid.generation, position.x, position.y, position.z, velocity.x, velocity.y, velocity.z);
+}
+
+ECS_EVENT() heavy_event(const HeavyEvent &event, ecs::EntityId eid)
+{
+  assert(event.data.size() == 100);
+  printf("heavy_event [%d/%d]\n", eid.entityIndex, eid.generation);
+}
+
+ECS_EVENT(on_event=UpdateEvent, HeavyEvent)
+multi_event(const ecs::Event &event, ecs::EntityId eid)
+{
+  if (const UpdateEvent *updateEvent = event.cast<UpdateEvent>())
+    printf("multi_event UpdateEvent [%d/%d]\n", eid.entityIndex, eid.generation);
+  else if (const HeavyEvent *heavyEvent = event.cast<HeavyEvent>())
+    printf("multi_event HeavyEvent [%d/%d]\n", eid.entityIndex, eid.generation);
+}
+
 int main()
 {
   const bool EntityContainerTest = false;
@@ -181,7 +215,7 @@ int main()
   // if (false)
   {
     Timer timer("create_entity"); // (0.066700 ms)
-    for (int i = 0; i < 100; i++)
+    for (int i = 0; i < 5; i++)
     {
       float f = i;
       ecs::EntityId eid = mgr.create_entity(
@@ -201,9 +235,9 @@ int main()
     Timer timer("create_entities"); // (0.046000 ms)
     std::vector<float3> positions;
     std::vector<std::string> names;
-    positions.reserve(100);
-    names.reserve(100);
-    for (int i = 0; i < 100; i++)
+    positions.reserve(5);
+    names.reserve(5);
+    for (int i = 0; i < 5; i++)
     {
       float f = i;
       positions.push_back({f, f, f});
@@ -238,6 +272,33 @@ int main()
 
 
   query_by_eid_test(mgr, allEids);
+
+
+  printf("ecs::send_event_immediate broadcast\n");
+  ecs::send_event_immediate(mgr, UpdateEvent{});
+  printf("ecs::send_event_immediate unicast\n");
+  for (ecs::EntityId eid : allEids)
+    ecs::send_event_immediate(mgr, eid, UpdateEvent{});
+
+  printf("ecs::send_event broadcast\n");
+  ecs::send_event(mgr, UpdateEvent{});
+  printf("ecs::send_event unicast\n");
+  for (ecs::EntityId eid : allEids)
+    ecs::send_event(mgr, eid, UpdateEvent{});
+
+  printf("ecs::perform_delayed_events\n");
+  ecs::perform_delayed_events(mgr);
+
+  std::vector<int> data(100);
+  HeavyEvent heavyEvent{data};
+  ecs::send_event_immediate(mgr, heavyEvent);
+  ecs::send_event_immediate(mgr, HeavyEvent{data});
+
+  ecs::send_event(mgr, HeavyEvent{heavyEvent});
+  ecs::send_event(mgr, HeavyEvent{data});
+  ecs::perform_delayed_events(mgr);
+
+
 
   return 0;
 }

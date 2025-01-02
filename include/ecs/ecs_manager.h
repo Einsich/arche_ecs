@@ -7,6 +7,7 @@
 #include "ecs/archetype.h"
 #include "ecs/template.h"
 #include "ecs/query.h"
+#include "ecs/event.h"
 
 #include <assert.h>
 #include <span>
@@ -18,13 +19,25 @@ using TemplatesMap = ska::flat_hash_map<TemplateId, Template>;
 
 struct EcsManager
 {
+  struct DelayedEvent
+  {
+    ComponentData eventData;
+    EventId eventId;
+    EntityId entityId;
+    bool broadcastEvent;
+  };
+
   TypeDeclarationMap typeMap;
   ComponentDeclarationMap componentMap;
   ArchetypeMap archetypeMap;
   ska::flat_hash_map<NameHash, Query> queries;
   ska::flat_hash_map<NameHash, System> systems;
+  ska::flat_hash_map<NameHash, EventHandler> events;
+  ska::flat_hash_map<EventId, std::vector<NameHash>> eventIdToHandlers;
+  std::vector<DelayedEvent> delayedEvents;
   EntityContainer entityContainer;
   TemplatesMap templates;
+
 
   ecs::TypeId EntityIdTypeId;
   ecs::ComponentId eidComponentId;
@@ -173,6 +186,21 @@ inline void register_system(EcsManager &mgr, System &&system)
   mgr.systems[system.nameHash] = std::move(system);
 }
 
+
+inline void register_event(EcsManager &mgr, EventHandler &&event)
+{
+  for (const auto &[id, archetype] : mgr.archetypeMap)
+  {
+    event.try_registrate(archetype.get());
+  }
+  printf("[ECS] Register system %s\n", event.uniqueName.c_str());
+  for (EventId eventId : event.eventIds)
+  {
+    mgr.eventIdToHandlers[eventId].push_back(event.nameHash);
+  }
+  mgr.events[event.nameHash] = std::move(event);
+}
+
 inline void register_archetype(EcsManager &mgr, Archetype &&archetype)
 {
   std::unique_ptr<Archetype> archetypePtr = std::make_unique<Archetype>(std::move(archetype));
@@ -184,7 +212,50 @@ inline void register_archetype(EcsManager &mgr, Archetype &&archetype)
   {
     query.try_registrate(archetypePtr.get());
   }
+  for (auto &[id, query] : mgr.events)
+  {
+    query.try_registrate(archetypePtr.get());
+  }
   mgr.archetypeMap[archetype.archetypeId] = std::move(archetypePtr);
+}
+
+void perform_event_immediate(EcsManager &mgr, EventId event_id, const void *event_ptr);
+void perform_event_immediate(EcsManager &mgr, EntityId eid, EventId event_id, const void *event_ptr);
+
+void perform_delayed_events(EcsManager &mgr);
+
+template <typename T>
+inline void send_event_immediate(EcsManager &mgr, const T &event)
+{
+  perform_event_immediate(mgr, ecs::EventInfo<T>::eventId, &event);
+}
+template <typename T>
+void send_event_immediate(EcsManager &mgr, ecs::EntityId eid, const T &event)
+{
+  perform_event_immediate(mgr, eid, ecs::EventInfo<T>::eventId, &event);
+}
+
+template <typename T>
+inline void send_event(EcsManager &mgr, T &&event)
+{
+  static_assert(std::is_rvalue_reference<decltype(event)>::value);
+  EcsManager::DelayedEvent delayedEvent;
+  delayedEvent.eventData = ComponentData(std::move(event));
+  delayedEvent.broadcastEvent = true;
+  delayedEvent.eventId = ecs::EventInfo<T>::eventId;
+  mgr.delayedEvents.push_back(std::move(delayedEvent));
+}
+
+template <typename T>
+inline void send_event(EcsManager &mgr, ecs::EntityId eid, T &&event)
+{
+  static_assert(std::is_rvalue_reference<decltype(event)>::value);
+  EcsManager::DelayedEvent delayedEvent;
+  delayedEvent.eventData = ComponentData(std::move(event));
+  delayedEvent.broadcastEvent = false;
+  delayedEvent.eventId = ecs::EventInfo<T>::eventId;
+  delayedEvent.entityId = eid;
+  mgr.delayedEvents.push_back(std::move(delayedEvent));
 }
 
 } // namespace ecs

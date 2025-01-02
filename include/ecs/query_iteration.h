@@ -38,6 +38,17 @@ void perform_system_unroll(Callable &&callable_query, uint32_t entities_count, t
   }
 }
 
+template<size_t UNROLL_N, typename ...PtrArgs, typename E, typename Callable>
+void perform_event_unroll(E &&event, Callable &&callable_query, uint32_t entities_count, typename restrict_type<PtrArgs>::type ...components)
+{
+  #pragma unroll UNROLL_N
+  for (uint32_t i = 0; i < entities_count; i++)
+  {
+    callable_query(event, (*components)...);
+    ((++components), ...);
+  }
+}
+
 
 template<size_t N, typename ...CastArgs, typename Callable, std::size_t... I>
 void templated_archetype_iterate(ecs::Archetype &archetype, const ecs::ToComponentMap &chunks, Callable &&callable_query, std::index_sequence<I...>)
@@ -47,6 +58,25 @@ void templated_archetype_iterate(ecs::Archetype &archetype, const ecs::ToCompone
     uint32_t entitiesCount = std::min(archetype.entityCount - entityOffset, archetype.chunkSize);
     perform_system_unroll<4, CastArgs...>(std::move(callable_query), entitiesCount, (CastArgs)(chunks[I] ? (*chunks[I])[chunkIdx] : nullptr)...);
   }
+}
+
+
+template<size_t N, typename ...CastArgs, typename E, typename Callable, std::size_t... I>
+void templated_event_archetype_iterate(ecs::Archetype &archetype, const ecs::ToComponentMap &chunks, E &&event, Callable &&callable_query, std::index_sequence<I...>)
+{
+  for (uint32_t chunkIdx = 0, chunkCount = archetype.chunkCount, entityOffset = 0; chunkIdx < chunkCount; chunkIdx++, entityOffset += archetype.chunkSize)
+  {
+    uint32_t entitiesCount = std::min(archetype.entityCount - entityOffset, archetype.chunkSize);
+    perform_event_unroll<4, CastArgs...>(std::forward<E>(event), std::move(callable_query), entitiesCount, (CastArgs)(chunks[I] ? (*chunks[I])[chunkIdx] : nullptr)...);
+  }
+}
+
+template<size_t N, typename ...CastArgs, typename E, typename Callable, std::size_t... I>
+void templated_archetype_event_one_entity(ecs::Archetype &archetype, const ecs::ToComponentMap &chunks, uint32_t component_idx, E &&event, Callable &&callable_query, std::index_sequence<I...>)
+{
+  uint32_t chunkIdx = component_idx >> archetype.chunkSizePower;
+  uint32_t offsetInChunk = component_idx & archetype.chunkMask;
+  callable_query(event, (((CastArgs)(chunks[I] ? (*chunks[I])[chunkIdx] : nullptr))[offsetInChunk])...);
 }
 
 template<size_t N, typename ...CastArgs, typename Callable>

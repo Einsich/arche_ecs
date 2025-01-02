@@ -80,7 +80,22 @@ struct Query
 
 struct System final : public Query
 {
-  void (*update_archetype)(Archetype &archetype, const ToComponentMap &to_archetype_component);
+  using SystemUpdateHandler = void (*)(Archetype &archetype, const ToComponentMap &to_archetype_component);
+  SystemUpdateHandler update_archetype;
 };
+
+struct EventHandler final : public Query
+{
+  using BroadcastEventHandler = void (*)(Archetype &archetype, const ToComponentMap &to_archetype_component, EventId event_id, const void *event_ptr);
+  using UnicastEventHandler = void (*)(Archetype &archetype, const ToComponentMap &to_archetype_component, uint32_t component_idx, EventId event_id, const void *event_ptr);
+
+  std::vector<EventId> eventIds;
+  BroadcastEventHandler broadcastEvent;
+  UnicastEventHandler unicastEvent;
+};
+
+// using BroadcastReadbackHandler = void (*)(Archetype &archetype, const ToComponentMap &to_archetype_component, EventId event_id, void *event_ptr);
+// using UnicastReadbackHandler = void (*)(Archetype &archetype, const ToComponentMap &to_archetype_component, EntityId eid, EventId event_id, void *event_ptr);
+
 
 }

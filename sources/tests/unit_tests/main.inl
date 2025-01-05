@@ -102,7 +102,7 @@ multi_event(const ecs::Event &event, ecs::EntityId eid)
 
 int main()
 {
-  const bool EntityContainerTest = false;
+  const bool EntityContainerTest = true;
   if (EntityContainerTest)
   {
     ecs_details::EntityContainer entityContainer;
@@ -169,7 +169,21 @@ int main()
   args.push_back(ecs::ComponentInit{"position", float3{1, 2, 3}});
   args.push_back(ecs::ComponentInit{"velocity", float3{4, 5, 6}});
 
-  ecs::create_entity(mgr, template1, std::move(args));
+  {
+    ecs::EntityId eid = ecs::create_entity(mgr, template1, std::move(args));
+    ECS_UNUSED(eid);
+    const float3 positionValue = float3{1, 2, 3};
+    const float3 newPositionValue = float3{3, 2, 1};
+    float3 newPositionValueRW = float3{3, 2, 1};
+    assert(*ecs::get_component<float3>(mgr, eid, "position") == positionValue);
+    assert(*ecs::get_rw_component<float3>(mgr, eid, "position") == positionValue);
+    assert(ecs::get_component<int>(mgr, eid, "position") == nullptr);
+    assert(ecs::get_component<float3>(mgr, eid, "positions") == nullptr);
+    assert(ecs::set_component<float3>(mgr, eid, "position", newPositionValue) == true);
+    assert(ecs::set_component<float3>(mgr, eid, "position", newPositionValueRW) == true);
+    assert(ecs::set_component<float3>(mgr, eid, "position", float3{newPositionValue}) == true);
+    assert(*ecs::get_component<float3>(mgr, eid, "position") == newPositionValue);
+  }
 
 
   ecs::create_entity(mgr,

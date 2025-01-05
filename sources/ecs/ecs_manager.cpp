@@ -297,4 +297,31 @@ void destroy_entities(EcsManager &mgr)
   mgr.entityContainer.freeIndices.clear();
 }
 
+const void *get_component(EcsManager &mgr, EntityId eid, ComponentId componentId)
+{
+  ecs::ArchetypeId archetypeId;
+  uint32_t componentIndex;
+  if (mgr.entityContainer.get(eid, archetypeId, componentIndex))
+  {
+    auto it = mgr.archetypeMap.find(archetypeId);
+    if (it == mgr.archetypeMap.end())
+    {
+      printf("Archetype not found\n");
+      return nullptr;
+    }
+    ecs_details::Archetype &archetype = *it->second;
+    int collumnIdx = archetype.getComponentCollumnIndex(componentId);
+    if (collumnIdx != -1)
+    {
+      return archetype.collumns[collumnIdx].get_data(componentIndex);
+    }
+  }
+  return nullptr;
+}
+
+void *get_rw_component(EcsManager &mgr, EntityId eid, ComponentId componentId)
+{
+  return const_cast<void *>(get_component(mgr, eid, componentId));
+}
+
 } // namespace ecs

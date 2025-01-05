@@ -32,7 +32,7 @@ void perform_event_immediate(EcsManager &mgr, EntityId eid, EventId event_id, co
 void perform_delayed_events(EcsManager &mgr);
 
 template <typename T>
-inline void send_event_immediate(EcsManager &mgr, const T &event)
+void send_event_immediate(EcsManager &mgr, const T &event)
 {
   perform_event_immediate(mgr, ecs::EventInfo<T>::eventId, &event);
 }
@@ -44,7 +44,7 @@ void send_event_immediate(EcsManager &mgr, ecs::EntityId eid, const T &event)
 }
 
 template <typename T>
-inline void send_event(EcsManager &mgr, T &&event)
+void send_event(EcsManager &mgr, T &&event)
 {
   static_assert(std::is_rvalue_reference<decltype(event)>::value);
   EcsManager::DelayedEvent delayedEvent;
@@ -55,7 +55,7 @@ inline void send_event(EcsManager &mgr, T &&event)
 }
 
 template <typename T>
-inline void send_event(EcsManager &mgr, ecs::EntityId eid, T &&event)
+void send_event(EcsManager &mgr, ecs::EntityId eid, T &&event)
 {
   static_assert(std::is_rvalue_reference<decltype(event)>::value);
   EcsManager::DelayedEvent delayedEvent;
@@ -64,6 +64,43 @@ inline void send_event(EcsManager &mgr, ecs::EntityId eid, T &&event)
   delayedEvent.eventId = ecs::EventInfo<T>::eventId;
   delayedEvent.entityId = eid;
   mgr.delayedEvents.push_back(std::move(delayedEvent));
+}
+
+const void *get_component(EcsManager &mgr, EntityId eid, ComponentId componentId);
+void *get_rw_component(EcsManager &mgr, EntityId eid, ComponentId componentId);
+
+template <typename T>
+const T *get_component(EcsManager &mgr, EntityId eid, const char *component_name)
+{
+  return static_cast<const T *>(get_component(mgr, eid, get_component_id(TypeInfo<T>::typeId, component_name)));
+}
+
+template <typename T>
+T *get_rw_component(EcsManager &mgr, EntityId eid, const char *component_name)
+{
+  return static_cast<T *>(get_rw_component(mgr, eid, get_component_id(TypeInfo<T>::typeId, component_name)));
+}
+
+template <typename T>
+bool set_component(EcsManager &mgr, EntityId eid, const char *component_name, T &&value)
+{
+  T *component = get_rw_component<T>(mgr, eid, component_name);
+  if (component)
+  {
+    *component = std::move(value);
+  }
+  return component != nullptr;
+}
+
+template <typename T>
+bool set_component(EcsManager &mgr, EntityId eid, const char *component_name, const T &value)
+{
+  T *component = get_rw_component<T>(mgr, eid, component_name);
+  if (component)
+  {
+    *component = value;
+  }
+  return component != nullptr;
 }
 
 }

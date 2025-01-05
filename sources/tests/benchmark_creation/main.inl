@@ -119,11 +119,9 @@ void entity_creation_test(std::ofstream &benchmark_file, int N)
   }
   ecs::EcsManager mgr;
 
-  ecs::TypeDeclarationInfo::iterate_all([&](const ecs::TypeDeclaration &type_declaration) {
-    mgr.typeMap[type_declaration.typeId] = type_declaration;
-  });
+  ecs::register_all_type_declarations(mgr);
 
-  ecs::CodegenFileRegistration::register_all_codegen_files(mgr);
+  ecs::register_all_codegen_files(mgr);
 
   ecs::TemplateId bodyTemplate = template_registration(mgr, "body",
     {{
@@ -137,7 +135,7 @@ void entity_creation_test(std::ofstream &benchmark_file, int N)
     for (int i = 0; i < N; i++)
     {
       float f = i;
-      mgr.create_entity(
+      ecs::create_entity(mgr,
         bodyTemplate,
         {{
           {"position", float3{f, f, f}},
@@ -157,7 +155,7 @@ void entity_creation_test(std::ofstream &benchmark_file, int N)
       init.push_back({"position", float3{f, f, f}});
       init.push_back({"velocity", float3{f, f, f}});
       init.push_back({"acceleration", float3{1.f, 1.f, 1.f}});
-      mgr.create_entity(
+      ecs::create_entity(mgr,
         bodyTemplate,
         std::move(init)
       );
@@ -191,7 +189,7 @@ void entity_creation_test(std::ofstream &benchmark_file, int N)
 
     benchmark_file << timer.get_time() << ";";
     // Timer timer("create_entities");
-    mgr.create_entities(
+    ecs::create_entities(mgr,
       bodyTemplate,
       std::move(init)
     );

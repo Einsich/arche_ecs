@@ -28,25 +28,8 @@ inline constexpr ComponentId get_component_id(const char *type_name, const char 
 
 using ComponentDeclarationMap = ska::flat_hash_map<ComponentId, std::unique_ptr<ComponentDeclaration>>;
 
-inline ComponentId get_or_add_component(ComponentDeclarationMap &component_map, TypeId typeId, const char *component_name)
-{
-  ComponentId componentId = get_component_id(typeId, component_name);
-  auto it = component_map.find(componentId);
-  if (it != component_map.end())
-  {
-    return componentId;
-  }
-  auto componentDeclaration = std::make_unique<ComponentDeclaration>();
-  componentDeclaration->typeId = typeId;
-  componentDeclaration->name = component_name;
-  componentDeclaration->componentId = componentId;
-  component_map[componentId] = std::move(componentDeclaration);
-  return componentId;
-}
+struct EcsManager;
 
-inline const ComponentDeclaration *find(const ComponentDeclarationMap &component_map, ComponentId component_id)
-{
-  auto it = component_map.find(component_id);
-  return it != component_map.end() ? it->second.get() : nullptr;
-}
+ComponentId get_or_add_component(EcsManager &mgr, TypeId typeId, const char *component_name);
+
 }

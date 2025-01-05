@@ -6,25 +6,19 @@
 #include "ecs/component_init.h"
 #include "ecs/component_declaration.h"
 
-namespace ecs
+namespace ecs_details
 {
 
-struct EcsManager;
-// namespace details
-// {
-
-using Type = ska::flat_hash_map<ComponentId, TypeId  /*ComponentId already has TypeId*/>;
-
-ArchetypeId get_archetype_id(const Type &type);
+using ArchetypeComponentType = ska::flat_hash_map<ecs::ComponentId, ecs::TypeId  /*ComponentId already has TypeId*/>;
 
 struct Archetype
 {
-  Type type;
-  ArchetypeId archetypeId;
+  ArchetypeComponentType type;
+  ecs::ArchetypeId archetypeId;
 
-  std::vector<Collumn> collumns;
+  std::vector<ecs_details::Collumn> collumns;
 
-  ska::flat_hash_map<ComponentId, size_t> componentToCollumnIndex;
+  ska::flat_hash_map<ecs::ComponentId, size_t> componentToCollumnIndex;
 
   uint32_t entityCount = 0;
   uint32_t chunkSize = 0;
@@ -34,29 +28,21 @@ struct Archetype
   uint32_t chunkCount = 0;
 
   Archetype() = default;
-  Archetype(const TypeDeclarationMap &type_map, ArchetypeId archetype_id, Type &&_type, ArchetypeChunkSize chunk_size_power);
+  Archetype(const ecs::TypeDeclarationMap &type_map, ecs::ArchetypeId archetype_id, ArchetypeComponentType &&_type, ecs::ArchetypeChunkSize chunk_size_power);
 
-  int get_component_index(ComponentId componentId) const
+  int getComponentCollumnIndex(ecs::ComponentId componentId) const
   {
     auto it = componentToCollumnIndex.find(componentId);
     return it != componentToCollumnIndex.end() ? it->second : -1;
   }
 
-  void try_add_chunk(int requiredEntityCount);
-
-  // return index of the added entity
-  void add_entity(const TypeDeclarationMap &type_map, const InitializerList &template_init, InitializerList &&override_list);
-
-  void add_entities(const TypeDeclarationMap &type_map, const InitializerList &template_init, InitializerSoaList &&override_soa_list);
-
-  void remove_entity(const TypeDeclarationMap &type_map, uint32_t entityIndex);
-
 };
 
-using ArchetypeMap = ska::flat_hash_map<ArchetypeId, std::unique_ptr<Archetype>>;
+// return index of the added entity
+void add_entity_to_archetype(Archetype &archetype, const ecs::TypeDeclarationMap &type_map, const ecs::InitializerList &template_init, ecs::InitializerList &&override_list);
 
-ArchetypeId get_or_create_archetype(EcsManager &mgr, const InitializerList &components, ArchetypeChunkSize chunk_size_power, const char *template_name);
+void add_entities_to_archetype(Archetype &archetype, const ecs::TypeDeclarationMap &type_map, const ecs::InitializerList &template_init, ecs::InitializerSoaList &&override_soa_list);
 
-// } // namespace details
+void remove_entity_from_archetype(Archetype &archetype, const ecs::TypeDeclarationMap &type_map, uint32_t entityIndex);
 
 } // namespace ecs

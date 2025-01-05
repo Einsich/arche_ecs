@@ -1,16 +1,7 @@
 #include "ecs/ecs.h"
-#include "ecs/config.h"
-#include "ecs/query_iteration.h"
 #include "ecs/ecs_manager.h"
-#include "ecs/codegen_attributes.h"
 #include <assert.h>
-
-
-#define UNUSED(x) (void)(x)
-
 #include "math_helper.h"
-
-
 #include "timer.h"
 
 void query_test(ecs::EcsManager &mgr);
@@ -94,7 +85,7 @@ int main()
   const bool EntityContainerTest = false;
   if (EntityContainerTest)
   {
-    ecs::EntityContainer entityContainer;
+    ecs_details::EntityContainer entityContainer;
     ecs::EntityId entityId = entityContainer.create_entity(0, 0);
     assert(entityContainer.is_alive(entityId));
     entityContainer.destroy_entity(entityId);
@@ -104,26 +95,24 @@ int main()
     ecs::EntityId entityId1 = entityContainer.create_entity(0, 0);
     assert(entityContainer.is_alive(entityId1));
     assert(entityId != entityId1);
-    UNUSED(entityId);
-    UNUSED(entityId1);
+    ECS_UNUSED(entityId);
+    ECS_UNUSED(entityId1);
   }
   ecs::EcsManager mgr;
 
-  ecs::TypeDeclarationInfo::iterate_all([&](const ecs::TypeDeclaration &type_declaration) {
-    mgr.typeMap[type_declaration.typeId] = type_declaration;
-  });
+  ecs::register_all_type_declarations(mgr);
 
-  ecs::CodegenFileRegistration::register_all_codegen_files(mgr);
+  ecs::register_all_codegen_files(mgr);
 
   for (const auto &[id, type] : mgr.typeMap)
   {
     printf("[ECS] type: %s, typeId: %x\n", type.typeName.c_str(), type.typeId);
   }
 
-  ecs::ComponentId positionId = ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<float3>::typeId, "position");
-  ecs::ComponentId velocityId = ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<float3>::typeId, "velocity");
-  ecs::ComponentId healthId = ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<int>::typeId, "health");
-  ecs::ComponentId nameId = ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<std::string>::typeId, "name");
+  ecs::ComponentId positionId = ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "position");
+  ecs::ComponentId velocityId = ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "velocity");
+  ecs::ComponentId healthId = ecs::get_or_add_component(mgr, ecs::TypeInfo<int>::typeId, "health");
+  ecs::ComponentId nameId = ecs::get_or_add_component(mgr, ecs::TypeInfo<std::string>::typeId, "name");
 
   for (const auto &[id, component] : mgr.componentMap)
   {
@@ -156,18 +145,14 @@ int main()
     printf("[ECS] archetype: %x, components: %zu\n", archetype->archetypeId, archetype->collumns.size());
   }
 
-
-
-  //unfortunately, we can't use initializer_list here, because it doesn't support move semantics
-  // _CONSTEXPR20 vector(initializer_list<_Ty> _Ilist, const _Alloc& _Al = _Alloc())
-
   ecs::InitializerList args;
   args.push_back(ecs::ComponentInit{"position", float3{1, 2, 3}});
   args.push_back(ecs::ComponentInit{"velocity", float3{4, 5, 6}});
-  mgr.create_entity(template1, std::move(args));
+
+  ecs::create_entity(mgr, template1, std::move(args));
 
 
-  mgr.create_entity(
+  ecs::create_entity(mgr,
     template3,
     ecs::InitializerList{
       {
@@ -206,10 +191,10 @@ int main()
     }}
   );
 
-  mgr.create_entity(movableTemplate);
-  mgr.create_entity(brickTemplate);
-  mgr.create_entity(humanTemplate);
-  mgr.create_entity(bigBrickTemplate);
+  ecs::create_entity(mgr, movableTemplate);
+  ecs::create_entity(mgr, brickTemplate);
+  ecs::create_entity(mgr, humanTemplate);
+  ecs::create_entity(mgr, bigBrickTemplate);
 
 
   // if (false)
@@ -218,7 +203,7 @@ int main()
     for (int i = 0; i < 5; i++)
     {
       float f = i;
-      ecs::EntityId eid = mgr.create_entity(
+      ecs::EntityId eid = ecs::create_entity(mgr,
         template2,
         {{
           {"position", float3{f, f, f}},
@@ -226,7 +211,7 @@ int main()
           {"name", std::string("very_long_node_name") + std::to_string(i)}
         }}
       );
-      UNUSED(eid);
+      ECS_UNUSED(eid);
     }
   }
 
@@ -244,7 +229,7 @@ int main()
       names.push_back("soa_node" + std::to_string(i));
     }
     ecs::InitializerSoaList init;
-    mgr.create_entities(
+    ecs::create_entities(mgr,
       template2,
       {{
           {"position", std::move(positions)},

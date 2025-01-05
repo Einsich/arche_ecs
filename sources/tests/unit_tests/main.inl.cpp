@@ -1,4 +1,4 @@
-#include <ecs/query_iteration.h>
+#include <ecs/codegen_helpers.h>
 template<typename Callable>
 static void print_name_query(ecs::EcsManager &mgr, Callable &&query_function);
 
@@ -11,71 +11,71 @@ static void print_name_by_eid_query(ecs::EcsManager &mgr, ecs::EntityId eid, Cal
 template<typename Callable>
 static void print_name_query(ecs::EcsManager &mgr, Callable &&query_function)
 {
-  constexpr ecs::NameHash queryHash = ecs::hash("sources/tests/unit_tests/main.inl:41[print_name_query]");
+  constexpr ecs::NameHash queryHash = ecs::hash("sources/tests/unit_tests/main.inl:32[print_name_query]");
   const int N = 2;
-  ecs::call_query<N, const std::string*, ecs::PrtWrapper<int>>(mgr, queryHash, std::move(query_function));
+  ecs_details::query_iteration<N, const std::string*, ecs_details::PrtWrapper<int>>(mgr, queryHash, std::move(query_function));
 }
 
 template<typename Callable>
 static void print_name_by_eid_query(ecs::EcsManager &mgr, ecs::EntityId eid, Callable &&query_function)
 {
-  constexpr ecs::NameHash queryHash = ecs::hash("sources/tests/unit_tests/main.inl:51[print_name_by_eid_query]");
+  constexpr ecs::NameHash queryHash = ecs::hash("sources/tests/unit_tests/main.inl:42[print_name_by_eid_query]");
   const int N = 2;
-  ecs::call_query<N, const std::string*, ecs::PrtWrapper<int>>(mgr, eid, queryHash, std::move(query_function));
+  ecs_details::query_invoke_for_entity<N, const std::string*, ecs_details::PrtWrapper<int>>(mgr, eid, queryHash, std::move(query_function));
 }
 
-static void update_implementation(ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)
+static void update_implementation(ecs_details::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)
 {
   const int N = 3;
-  ecs::templated_archetype_iterate<N, ecs::EntityId*, float3*, const float3*>(archetype, to_archetype_component, update, std::make_index_sequence<N>());
+  ecs_details::query_archetype_iteration<N, ecs::EntityId*, float3*, const float3*>(archetype, to_archetype_component, update, std::make_index_sequence<N>());
 }
 
-static void print_name_implementation(ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)
+static void print_name_implementation(ecs_details::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)
 {
   const int N = 3;
-  ecs::templated_archetype_iterate<N, const std::string*, float3*, ecs::PrtWrapper<int>>(archetype, to_archetype_component, print_name, std::make_index_sequence<N>());
+  ecs_details::query_archetype_iteration<N, const std::string*, float3*, ecs_details::PrtWrapper<int>>(archetype, to_archetype_component, print_name, std::make_index_sequence<N>());
 }
 
-static void update_event_broadcast_event(ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component, ecs::EventId event_id, const void *event_ptr)
-{
-  ECS_UNUSED(event_id);
-  const int N = 3;
-  ecs::templated_event_archetype_iterate<N, ecs::EntityId*, float3*, const float3*>(archetype, to_archetype_component, *(const UpdateEvent *)event_ptr, update_event, std::make_index_sequence<N>());
-}
-
-static void update_event_unicast_event(ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component, uint32_t component_idx, ecs::EventId event_id, const void *event_ptr)
+static void update_event_broadcast_event(ecs_details::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component, ecs::EventId event_id, const void *event_ptr)
 {
   ECS_UNUSED(event_id);
   const int N = 3;
-  ecs::templated_archetype_event_one_entity<N, ecs::EntityId*, float3*, const float3*>(archetype, to_archetype_component, component_idx, *(const UpdateEvent *)event_ptr, update_event, std::make_index_sequence<N>());
+  ecs_details::event_archetype_iteration<N, ecs::EntityId*, float3*, const float3*>(archetype, to_archetype_component, *(const UpdateEvent *)event_ptr, update_event, std::make_index_sequence<N>());
 }
 
-static void heavy_event_broadcast_event(ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component, ecs::EventId event_id, const void *event_ptr)
+static void update_event_unicast_event(ecs_details::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component, uint32_t component_idx, ecs::EventId event_id, const void *event_ptr)
+{
+  ECS_UNUSED(event_id);
+  const int N = 3;
+  ecs_details::event_invoke_for_entity<N, ecs::EntityId*, float3*, const float3*>(archetype, to_archetype_component, component_idx, *(const UpdateEvent *)event_ptr, update_event, std::make_index_sequence<N>());
+}
+
+static void heavy_event_broadcast_event(ecs_details::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component, ecs::EventId event_id, const void *event_ptr)
 {
   ECS_UNUSED(event_id);
   const int N = 1;
-  ecs::templated_event_archetype_iterate<N, ecs::EntityId*>(archetype, to_archetype_component, *(const HeavyEvent *)event_ptr, heavy_event, std::make_index_sequence<N>());
+  ecs_details::event_archetype_iteration<N, ecs::EntityId*>(archetype, to_archetype_component, *(const HeavyEvent *)event_ptr, heavy_event, std::make_index_sequence<N>());
 }
 
-static void heavy_event_unicast_event(ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component, uint32_t component_idx, ecs::EventId event_id, const void *event_ptr)
+static void heavy_event_unicast_event(ecs_details::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component, uint32_t component_idx, ecs::EventId event_id, const void *event_ptr)
 {
   ECS_UNUSED(event_id);
   const int N = 1;
-  ecs::templated_archetype_event_one_entity<N, ecs::EntityId*>(archetype, to_archetype_component, component_idx, *(const HeavyEvent *)event_ptr, heavy_event, std::make_index_sequence<N>());
+  ecs_details::event_invoke_for_entity<N, ecs::EntityId*>(archetype, to_archetype_component, component_idx, *(const HeavyEvent *)event_ptr, heavy_event, std::make_index_sequence<N>());
 }
 
-static void multi_event_broadcast_event(ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component, ecs::EventId event_id, const void *event_ptr)
+static void multi_event_broadcast_event(ecs_details::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component, ecs::EventId event_id, const void *event_ptr)
 {
   ECS_UNUSED(event_id);
   const int N = 1;
-  ecs::templated_event_archetype_iterate<N, ecs::EntityId*>(archetype, to_archetype_component, ecs::Event(event_id, event_ptr), multi_event, std::make_index_sequence<N>());
+  ecs_details::event_archetype_iteration<N, ecs::EntityId*>(archetype, to_archetype_component, ecs::Event(event_id, event_ptr), multi_event, std::make_index_sequence<N>());
 }
 
-static void multi_event_unicast_event(ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component, uint32_t component_idx, ecs::EventId event_id, const void *event_ptr)
+static void multi_event_unicast_event(ecs_details::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component, uint32_t component_idx, ecs::EventId event_id, const void *event_ptr)
 {
   ECS_UNUSED(event_id);
   const int N = 1;
-  ecs::templated_archetype_event_one_entity<N, ecs::EntityId*>(archetype, to_archetype_component, component_idx, ecs::Event(event_id, event_ptr), multi_event, std::make_index_sequence<N>());
+  ecs_details::event_invoke_for_entity<N, ecs::EntityId*>(archetype, to_archetype_component, component_idx, ecs::Event(event_id, event_ptr), multi_event, std::make_index_sequence<N>());
 }
 
 static void ecs_registration(ecs::EcsManager &mgr)
@@ -83,12 +83,12 @@ static void ecs_registration(ecs::EcsManager &mgr)
   ECS_UNUSED(mgr);
   {
     ecs::Query query;
-    query.uniqueName = "sources/tests/unit_tests/main.inl:41[print_name_query]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:32[print_name_query]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
-      {ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<std::string>::typeId, "name"), ecs::Query::ComponentAccess::READ_ONLY},
-      {ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<int>::typeId, "health"), ecs::Query::ComponentAccess::READ_WRITE_OPTIONAL}
+      {ecs::get_or_add_component(mgr, ecs::TypeInfo<std::string>::typeId, "name"), ecs::Query::ComponentAccess::READ_ONLY},
+      {ecs::get_or_add_component(mgr, ecs::TypeInfo<int>::typeId, "health"), ecs::Query::ComponentAccess::READ_WRITE_OPTIONAL}
     };
     query.requireComponents =
     {
@@ -100,12 +100,12 @@ static void ecs_registration(ecs::EcsManager &mgr)
   }
   {
     ecs::Query query;
-    query.uniqueName = "sources/tests/unit_tests/main.inl:51[print_name_by_eid_query]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:42[print_name_by_eid_query]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
-      {ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<std::string>::typeId, "name"), ecs::Query::ComponentAccess::READ_ONLY},
-      {ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<int>::typeId, "health"), ecs::Query::ComponentAccess::READ_WRITE_OPTIONAL}
+      {ecs::get_or_add_component(mgr, ecs::TypeInfo<std::string>::typeId, "name"), ecs::Query::ComponentAccess::READ_ONLY},
+      {ecs::get_or_add_component(mgr, ecs::TypeInfo<int>::typeId, "health"), ecs::Query::ComponentAccess::READ_WRITE_OPTIONAL}
     };
     query.requireComponents =
     {
@@ -117,13 +117,13 @@ static void ecs_registration(ecs::EcsManager &mgr)
   }
   {
     ecs::System query;
-    query.uniqueName = "sources/tests/unit_tests/main.inl:28[update]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:19[update]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
-      {ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<ecs::EntityId>::typeId, "eid"), ecs::Query::ComponentAccess::READ_COPY},
-      {ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<float3>::typeId, "position"), ecs::Query::ComponentAccess::READ_WRITE},
-      {ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<float3>::typeId, "velocity"), ecs::Query::ComponentAccess::READ_ONLY}
+      {ecs::get_or_add_component(mgr, ecs::TypeInfo<ecs::EntityId>::typeId, "eid"), ecs::Query::ComponentAccess::READ_COPY},
+      {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "position"), ecs::Query::ComponentAccess::READ_WRITE},
+      {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "velocity"), ecs::Query::ComponentAccess::READ_ONLY}
     };
     query.requireComponents =
     {
@@ -136,13 +136,13 @@ static void ecs_registration(ecs::EcsManager &mgr)
   }
   {
     ecs::System query;
-    query.uniqueName = "sources/tests/unit_tests/main.inl:34[print_name]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:25[print_name]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
-      {ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<std::string>::typeId, "name"), ecs::Query::ComponentAccess::READ_ONLY},
-      {ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<float3>::typeId, "position"), ecs::Query::ComponentAccess::READ_COPY},
-      {ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<int>::typeId, "health"), ecs::Query::ComponentAccess::READ_WRITE_OPTIONAL}
+      {ecs::get_or_add_component(mgr, ecs::TypeInfo<std::string>::typeId, "name"), ecs::Query::ComponentAccess::READ_ONLY},
+      {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "position"), ecs::Query::ComponentAccess::READ_COPY},
+      {ecs::get_or_add_component(mgr, ecs::TypeInfo<int>::typeId, "health"), ecs::Query::ComponentAccess::READ_WRITE_OPTIONAL}
     };
     query.requireComponents =
     {
@@ -155,13 +155,13 @@ static void ecs_registration(ecs::EcsManager &mgr)
   }
   {
     ecs::EventHandler query;
-    query.uniqueName = "sources/tests/unit_tests/main.inl:72[update_event]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:63[update_event]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
-      {ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<ecs::EntityId>::typeId, "eid"), ecs::Query::ComponentAccess::READ_COPY},
-      {ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<float3>::typeId, "position"), ecs::Query::ComponentAccess::READ_WRITE},
-      {ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<float3>::typeId, "velocity"), ecs::Query::ComponentAccess::READ_ONLY}
+      {ecs::get_or_add_component(mgr, ecs::TypeInfo<ecs::EntityId>::typeId, "eid"), ecs::Query::ComponentAccess::READ_COPY},
+      {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "position"), ecs::Query::ComponentAccess::READ_WRITE},
+      {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "velocity"), ecs::Query::ComponentAccess::READ_ONLY}
     };
     query.requireComponents =
     {
@@ -176,11 +176,11 @@ static void ecs_registration(ecs::EcsManager &mgr)
   }
   {
     ecs::EventHandler query;
-    query.uniqueName = "sources/tests/unit_tests/main.inl:77[heavy_event]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:68[heavy_event]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
-      {ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<ecs::EntityId>::typeId, "eid"), ecs::Query::ComponentAccess::READ_COPY}
+      {ecs::get_or_add_component(mgr, ecs::TypeInfo<ecs::EntityId>::typeId, "eid"), ecs::Query::ComponentAccess::READ_COPY}
     };
     query.requireComponents =
     {
@@ -195,11 +195,11 @@ static void ecs_registration(ecs::EcsManager &mgr)
   }
   {
     ecs::EventHandler query;
-    query.uniqueName = "sources/tests/unit_tests/main.inl:83[multi_event]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:74[multi_event]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
-      {ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<ecs::EntityId>::typeId, "eid"), ecs::Query::ComponentAccess::READ_COPY}
+      {ecs::get_or_add_component(mgr, ecs::TypeInfo<ecs::EntityId>::typeId, "eid"), ecs::Query::ComponentAccess::READ_COPY}
     };
     query.requireComponents =
     {
@@ -213,5 +213,5 @@ static void ecs_registration(ecs::EcsManager &mgr)
     ecs::register_event(mgr, std::move(query));
   }
 }
-static ecs::CodegenFileRegistration fileRegistration(&ecs_registration);
+static ecs_details::CodegenFileRegistration fileRegistration(&ecs_registration);
 ECS_PULL_DEFINITION(variable_pull_main)

@@ -3,11 +3,8 @@
 #include "ecs/archetype_chunk_size.h"
 #include <numeric> // for lcm
 
-namespace ecs
+namespace ecs_details
 {
-
-// namespace details
-// {
 
 struct Collumn
 {
@@ -18,12 +15,12 @@ struct Collumn
   size_t alignmentOfElement;
   size_t chunkSize;
   size_t chunkMask;
-  TypeId typeId;
-  ArchetypeChunkSize chunkSizePower;
+  ecs::TypeId typeId;
+  ecs::ArchetypeChunkSize chunkSizePower;
   std::align_val_t containerAlignment;
-  ComponentId componentId;
+  ecs::ComponentId componentId;
 
-  Collumn(ArchetypeChunkSize chunk_size_power, size_t size_of_element, size_t alignment_of_element, TypeId type_id) :
+  Collumn(ecs::ArchetypeChunkSize chunk_size_power, size_t size_of_element, size_t alignment_of_element, ecs::TypeId type_id) :
     capacity(0),
     sizeOfElement(size_of_element),
     alignmentOfElement(alignment_of_element),
@@ -53,7 +50,5 @@ struct Collumn
     return chunks[linear_index >> chunkSizePower] + (linear_index & chunkMask) * sizeOfElement;
   }
 };
-
-// } // namespace details
 
 } // namespace ecs

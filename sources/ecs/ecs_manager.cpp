@@ -1,9 +1,147 @@
 #include "ecs/ecs_manager.h"
+#include "ecs/codegen_helpers.h"
+#include "ecs/type_declaration_helper.h"
 
 #include <span>
+#include <assert.h>
+
+ECS_TYPE_DECLARATION_ALIAS(ecs::EntityId, "EntityId")
+
+namespace ecs_details
+{
+  ecs::ArchetypeId get_or_create_archetype(ecs::EcsManager &mgr, const ecs::InitializerList &components, ecs::ArchetypeChunkSize chunk_size_power, const char *template_name);
+}
 
 namespace ecs
 {
+
+EcsManager::EcsManager()
+{
+  TypeDeclaration entityIdTypeDeclaration = create_type_declaration<ecs::EntityId>();
+  EntityIdTypeId = entityIdTypeDeclaration.typeId;
+  typeMap[EntityIdTypeId] = std::move(entityIdTypeDeclaration);
+  eidComponentId = ecs::get_or_add_component(*this, EntityIdTypeId, "eid");
+}
+
+void register_all_codegen_files(ecs::EcsManager &mgr)
+{
+  for (const ecs_details::CodegenFileRegistration *info = ecs_details::CodegenFileRegistration::tail; info; info = info->next)
+  {
+    info->registrationFunction(mgr);
+  }
+}
+
+void register_all_type_declarations(ecs::EcsManager &mgr)
+{
+  for (ecs_details::TypeDeclarationInfo *info = ecs_details::TypeDeclarationInfo::tail; info; info = info->next)
+  {
+    const ecs::TypeDeclaration &type_declaration = info->type_declaration;
+    mgr.typeMap[type_declaration.typeId] = type_declaration;
+  }
+}
+
+ComponentId get_or_add_component(EcsManager &mgr, TypeId typeId, const char *component_name)
+{
+  ComponentId componentId = get_component_id(typeId, component_name);
+  auto it = mgr.componentMap.find(componentId);
+  if (it != mgr.componentMap.end())
+  {
+    return componentId;
+  }
+  auto componentDeclaration = std::make_unique<ComponentDeclaration>();
+  componentDeclaration->typeId = typeId;
+  componentDeclaration->name = component_name;
+  componentDeclaration->componentId = componentId;
+  mgr.componentMap[componentId] = std::move(componentDeclaration);
+  return componentId;
+}
+
+static ecs::EntityId create_entity(EcsManager &mgr, ArchetypeId archetypeId, const InitializerList &template_init, InitializerList &&override_list)
+{
+  auto it = mgr.archetypeMap.find(archetypeId);
+  if (it == mgr.archetypeMap.end())
+  {
+    printf("Archetype not found\n");
+    return EntityId();
+  }
+  ecs_details::Archetype &archetype = *it->second;
+  uint32_t entityIndex = archetype.entityCount;
+  ecs::EntityId eid = mgr.entityContainer.create_entity(archetypeId, entityIndex);
+  override_list.push_back(ecs::ComponentInit(mgr.eidComponentId, ecs::EntityId(eid)));
+  // can be not equal if template has unregistered components. Not terrible, but not good. In this case, we should skip them
+  assert(archetype.type.size() <= template_init.size());
+  ecs_details::add_entity_to_archetype(archetype, mgr.typeMap, template_init, std::move(override_list));
+  return eid;
+}
+
+ecs::EntityId create_entity(EcsManager &mgr, TemplateId templateId, InitializerList &&init_list)
+{
+  auto it = mgr.templates.find(templateId);
+  if (it == mgr.templates.end())
+  {
+    printf("[ECS] Error: Template not found\n");
+    return EntityId();
+  }
+  const Template &templateRecord = it->second;
+  return create_entity(mgr, templateRecord.archetypeId, templateRecord.args, std::move(init_list));
+}
+
+static std::vector<EntityId> create_entities(EcsManager &mgr, ArchetypeId archetypeId, const InitializerList &template_init, InitializerSoaList &&override_soa_list)
+{
+  auto it = mgr.archetypeMap.find(archetypeId);
+  if (it == mgr.archetypeMap.end())
+  {
+    printf("Archetype not found\n");
+    return {};
+  }
+  ecs_details::Archetype &archetype = *it->second;
+  int requiredEntityCount = override_soa_list.size();
+  std::vector<EntityId> eids;
+  eids.reserve(requiredEntityCount);
+  uint32_t entityIndex = archetype.entityCount;
+  for (int i = 0; i < requiredEntityCount; i++)
+  {
+    eids.push_back(mgr.entityContainer.create_entity(archetypeId, entityIndex + i));
+  }
+
+  // need to create copy to return list of eids
+  override_soa_list.push_back(ecs::ComponentSoaInit(mgr.eidComponentId, std::vector<EntityId>(eids)));
+  assert(archetype.type.size() == template_init.size());
+  ecs_details::add_entities_to_archetype(archetype, mgr.typeMap, template_init, std::move(override_soa_list));
+  return eids;
+}
+
+std::vector<EntityId> create_entities(EcsManager &mgr, TemplateId templateId, InitializerSoaList &&init_soa_list)
+{
+  auto it = mgr.templates.find(templateId);
+  if (it == mgr.templates.end())
+  {
+    printf("[ECS] Error: Template not found\n");
+    return {};
+  }
+  const Template &templateRecord = it->second;
+  return create_entities(mgr, templateRecord.archetypeId, templateRecord.args, std::move(init_soa_list));
+}
+
+bool destroy_entity(EcsManager &mgr, ecs::EntityId eid)
+{
+  ecs::ArchetypeId archetypeId;
+  uint32_t componentIndex;
+  if (mgr.entityContainer.get(eid, archetypeId, componentIndex))
+  {
+    auto it = mgr.archetypeMap.find(archetypeId);
+    if (it == mgr.archetypeMap.end())
+    {
+      printf("Archetype not found\n");
+      return false;
+    }
+    ecs_details::Archetype &archetype = *it->second;
+    ecs_details::remove_entity_from_archetype(archetype, mgr.typeMap, componentIndex);
+    mgr.entityContainer.destroy_entity(eid);
+    return true;
+  }
+  return false;
+}
 
 void perform_event_immediate(EcsManager &mgr, EventId event_id, const void *event_ptr)
 {
@@ -44,7 +182,7 @@ void perform_event_immediate(EcsManager &mgr, EntityId eid, EventId event_id, co
           if (ait != handler.archetypesCache.end())
           {
             const auto &archetypeRecord = ait->second;
-            ecs::Archetype &archetype = *archetypeRecord.archetype;
+            ecs_details::Archetype &archetype = *archetypeRecord.archetype;
             const ecs::ToComponentMap &toComponentIndex = archetypeRecord.toComponentIndex;
             handler.unicastEvent(archetype, toComponentIndex, componentIdx, event_id, event_ptr);
           }
@@ -70,7 +208,7 @@ void perform_delayed_events(EcsManager &mgr)
   mgr.delayedEvents.clear();
 }
 
-TemplateId template_registration(
+static TemplateId template_registration(
   EcsManager &mgr,
   ComponentId eid_component_id,
   const char *_name,
@@ -106,13 +244,23 @@ TemplateId template_registration(
       }
     }
   }
-  ArchetypeId archetypeId = get_or_create_archetype(mgr, components, chunk_size_power, _name);
+  ArchetypeId archetypeId = ecs_details::get_or_create_archetype(mgr, components, chunk_size_power, _name);
 
   Template templateRecord{std::string(_name), std::move(components), archetypeId, {}};
 
   mgr.templates[templateId] = std::move(templateRecord);
 
   return templateId;
+}
+
+TemplateId template_registration(EcsManager &manager, const char *_name, InitializerList &&components, ArchetypeChunkSize chunk_size_power)
+{
+  return template_registration(manager, manager.eidComponentId, _name, {}, std::move(components), chunk_size_power);
+}
+
+TemplateId template_registration(EcsManager &manager, const char *_name, TemplateId parent_template, InitializerList &&components, ArchetypeChunkSize chunk_size_power)
+{
+  return template_registration(manager, manager.eidComponentId, _name, {&parent_template, 1}, std::move(components), chunk_size_power);
 }
 
 } // namespace ecs

@@ -384,7 +384,7 @@ void template_query_types(std::ofstream &outFile, const ParserFunctionArgument *
     }
     else
     {
-      snprintf(buffer, bufferSize, "ecs::PrtWrapper<%s%s>%s",
+      snprintf(buffer, bufferSize, "ecs_details::PrtWrapper<%s%s>%s",
               arg.is_const ? "const " : "",
               arg.type.c_str(),
               i + 1 == args_count ? "" : ", ");
@@ -439,7 +439,7 @@ static void query_definition(std::ofstream &outFile, const std::vector<ParserSys
           "{\n"
           "  constexpr ecs::NameHash queryHash = ecs::hash(\"%s\");\n"
           "  const int N = %d;\n"
-          "  ecs::call_query<N, ",
+          "  ecs_details::query_iteration<N, ",
           name, query.unique_name.c_str(), query.args.size());
     template_query_types(outFile, query.args.data(), query.args.size());
     write(outFile,
@@ -459,7 +459,7 @@ static void single_query_definition(std::ofstream &outFile, const std::vector<Pa
           "{\n"
           "  constexpr ecs::NameHash queryHash = ecs::hash(\"%s\");\n"
           "  const int N = %d;\n"
-          "  ecs::call_query<N, ",
+          "  ecs_details::query_invoke_for_entity<N, ",
           name, query.unique_name.c_str(), query.args.size());
     template_query_types(outFile, query.args.data(), query.args.size());
     write(outFile,
@@ -474,10 +474,10 @@ static void system_definition(std::ofstream &outFile, const std::vector<ParserSy
   {
     const char *name = query.sys_name.c_str();
     write(outFile,
-          "static void %s_implementation(ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)\n"
+          "static void %s_implementation(ecs_details::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)\n"
           "{\n"
           "  const int N = %d;\n"
-          "  ecs::templated_archetype_iterate<N, ",
+          "  ecs_details::query_archetype_iteration<N, ",
           name, query.args.size());
     template_query_types(outFile, query.args.data(), query.args.size());
     write(outFile,
@@ -494,11 +494,11 @@ static void event_definition(std::ofstream &outFile, const std::vector<ParserSys
     const char *event_type = query.args[0].type.c_str();
     const bool isAbstractEvent = query.args[0].type == "ecs::Event";
     write(outFile,
-          "static void %s_broadcast_event(ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component, ecs::EventId event_id, const void *event_ptr)\n"
+          "static void %s_broadcast_event(ecs_details::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component, ecs::EventId event_id, const void *event_ptr)\n"
           "{\n"
           "  ECS_UNUSED(event_id);\n"
           "  const int N = %d;\n"
-          "  ecs::templated_event_archetype_iterate<N, ",
+          "  ecs_details::event_archetype_iteration<N, ",
           name, query.args.size() - 1);
     template_query_types(outFile, query.args.data() + 1, query.args.size() - 1);
 
@@ -512,11 +512,11 @@ static void event_definition(std::ofstream &outFile, const std::vector<ParserSys
           "}\n\n", event_type, name);
 
     write(outFile,
-          "static void %s_unicast_event(ecs::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component, uint32_t component_idx, ecs::EventId event_id, const void *event_ptr)\n"
+          "static void %s_unicast_event(ecs_details::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component, uint32_t component_idx, ecs::EventId event_id, const void *event_ptr)\n"
           "{\n"
           "  ECS_UNUSED(event_id);\n"
           "  const int N = %d;\n"
-          "  ecs::templated_archetype_event_one_entity<N, ",
+          "  ecs_details::event_invoke_for_entity<N, ",
           name, query.args.size() - 1);
     template_query_types(outFile, query.args.data() + 1, query.args.size() - 1);
 
@@ -540,13 +540,13 @@ static void request_definition(std::ofstream &outFile, const std::vector<ParserS
     write(outFile,
           "static void %s_handler(ecs::Request &request)\n"
           "{\n"
-          "  ecs::perform_request(reinterpret_cast<%s &>(request), %s__cache__, %s);\n"
+          "  ecs_details::perform_request(reinterpret_cast<%s &>(request), %s__cache__, %s);\n"
           "}\n\n",
           name, event_type, name, name);
     write(outFile,
           "static void %s_single_handler(ecs::EntityId eid, ecs::Request &request)\n"
           "{\n"
-          "  ecs::perform_request(eid, reinterpret_cast<%s &>(request), %s__cache__, %s);\n"
+          "  ecs_details::perform_request(eid, reinterpret_cast<%s &>(request), %s__cache__, %s);\n"
           "}\n\n",
           name, event_type, name, name);
   }
@@ -562,7 +562,7 @@ void fill_arguments(std::ofstream &outFile, const std::vector<ParserFunctionArgu
     auto &arg = args[i];
 
     write(outFile,
-          "      {ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<%s>::typeId, \"%s\"), %s}%s\n",
+          "      {ecs::get_or_add_component(mgr, ecs::TypeInfo<%s>::typeId, \"%s\"), %s}%s\n",
           arg.type.c_str(),
           arg.name.c_str(),
           arg.get_type(),
@@ -579,7 +579,7 @@ void fill_required_arguments(std::ofstream &outFile, const std::vector<ParserFun
     auto &arg = args[i];
 
     write(outFile,
-          "      ecs::get_or_add_component(mgr.componentMap, ecs::TypeInfo<%s>::typeId, \"%s\")%s\n",
+          "      ecs::get_or_add_component(mgr, ecs::TypeInfo<%s>::typeId, \"%s\")%s\n",
           arg.type.c_str(),
           arg.name.c_str(),
           i + 1 == (uint)args.size() ? "" : ",");
@@ -754,7 +754,7 @@ void process_inl_file(const fs::path &path, const fs::path &root)
 
   std::ofstream outFile;
   outFile.open(pathStr + ".cpp", std::ios::out);
-  outFile << "#include <ecs/query_iteration.h>\n";
+  outFile << "#include <ecs/codegen_helpers.h>\n";
   query_forward_declaration(outFile, queriesDescriptions);
   single_query_forward_declaration(outFile, singleQueriesDescriptions);
   outFile << "#include " << path.filename() << "\n";
@@ -779,7 +779,7 @@ void process_inl_file(const fs::path &path, const fs::path &root)
   register_requests(outFile, requestDescriptions);
 
   outFile << "}\n";
-  outFile << "static ecs::CodegenFileRegistration fileRegistration(&ecs_registration);\n";
+  outFile << "static ecs_details::CodegenFileRegistration fileRegistration(&ecs_registration);\n";
   outFile << "ECS_PULL_DEFINITION(" << ("variable_pull_" + fileName) << ")\n";
   outFile.close();
 

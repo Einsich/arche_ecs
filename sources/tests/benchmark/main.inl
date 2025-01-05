@@ -8,6 +8,7 @@
 #include <random>
 #include <array>
 #include <fstream>
+#include <assert.h>
 
 const float dt = 0.02f;
 struct IBody
@@ -457,11 +458,9 @@ void ecs_test(std::ofstream &benchmark_file, int TESTS_COUNT, int N)
 {
   ecs::EcsManager mgr;
 
-  ecs::TypeDeclarationInfo::iterate_all([&](const ecs::TypeDeclaration &type_declaration) {
-    mgr.typeMap[type_declaration.typeId] = type_declaration;
-  });
+  ecs::register_all_type_declarations(mgr);
 
-  ecs::CodegenFileRegistration::register_all_codegen_files(mgr);
+  ecs::register_all_codegen_files(mgr);
   ecs::TemplateId bodyTemplate = template_registration(mgr, "body",
     {{
       {mgr, "position", float3{}},
@@ -475,7 +474,7 @@ void ecs_test(std::ofstream &benchmark_file, int TESTS_COUNT, int N)
     for (int i = 0; i < entityCount; i++)
     {
       float f = i;
-      mgr.create_entity(
+      ecs::create_entity(mgr,
         bodyTemplate,
         {{
           {"position", float3{f, f, f}},
@@ -510,7 +509,7 @@ void ecs_test(std::ofstream &benchmark_file, int TESTS_COUNT, int N)
           {mgr, "acceleration", std::move(accelerations)},
       }};
 
-    mgr.create_entities(
+    ecs::create_entities(mgr,
       bodyTemplate,
       std::move(init)
     );

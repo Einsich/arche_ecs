@@ -45,4 +45,6 @@ void add_entities_to_archetype(Archetype &archetype, const ecs::TypeDeclarationM
 
 void remove_entity_from_archetype(Archetype &archetype, const ecs::TypeDeclarationMap &type_map, uint32_t entityIndex);
 
+void destroy_all_entities_from_archetype(Archetype &archetype, const ecs::TypeDeclarationMap &type_map);
+
 } // namespace ecs

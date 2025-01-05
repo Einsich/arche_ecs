@@ -144,7 +144,21 @@ void remove_entity_from_archetype(Archetype &archetype, const ecs::TypeDeclarati
       typeDeclaration->move_construct(removedEntityComponentPtr, lastEntityComponentPtr);
     }
   }
- archetype.entityCount--;
+  archetype.entityCount--;
+}
+
+void destroy_all_entities_from_archetype(Archetype &archetype, const ecs::TypeDeclarationMap &type_map)
+{
+  for (ecs_details::Collumn &collumn : archetype.collumns)
+  {
+    const ecs::TypeDeclaration *typeDeclaration = find_type_declaration(type_map, collumn.typeId);
+    for (uint32_t i = 0; i < archetype.entityCount; i++)
+    {
+      void *entityComponentPtr = collumn.get_data(i);
+      typeDeclaration->destruct(entityComponentPtr);
+    }
+  }
+  archetype.entityCount = 0;
 }
 
 static void register_archetype(ecs::EcsManager &mgr, ecs_details::Archetype &&archetype)

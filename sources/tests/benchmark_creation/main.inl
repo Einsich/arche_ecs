@@ -196,4 +196,5 @@ void entity_creation_test(std::ofstream &benchmark_file, int N)
     benchmark_file << timer.stop() << ";";
   }
 
+  ecs::destroy_entities(mgr);
 }

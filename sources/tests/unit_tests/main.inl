@@ -16,7 +16,8 @@ ECS_TYPE_REGISTRATION(float3)
 ECS_TYPE_REGISTRATION(std::string)
 
 
-ECS_SYSTEM() update(ecs::EntityId eid, float3 &position, const float3 &velocity)
+ECS_SYSTEM(require=std::string name; require_not=int health)
+update(ecs::EntityId eid, float3 &position, const float3 &velocity)
 {
   printf("update [%d/%d] (%f %f %f), (%f %f %f)\n", eid.entityIndex, eid.generation, position.x, position.y, position.z, velocity.x, velocity.y, velocity.z);
 }
@@ -44,6 +45,25 @@ void query_by_eid_test(ecs::EcsManager &mgr, const std::vector<ecs::EntityId> &e
       printf("print_name_by_eid [%s] %d\n", name.c_str(), health ? *health : -1);
     });
   }
+}
+
+ECS_EVENT() on_appear_event(const ecs::OnAppear &, const std::string &name, const int *health)
+{
+  printf("on_appear_event [%s] %d\n", name.c_str(), health ? *health : -1);
+}
+
+ECS_EVENT() on_disappear_event(const ecs::OnDisappear &, const std::string &name, const int *health)
+{
+  printf("on_disappear_event [%s] %d\n", name.c_str(), health ? *health : -1);
+}
+
+ECS_EVENT(on_event=ecs::OnAppear, ecs::OnDisappear)
+appear_disapper_event(const ecs::Event &event, const std::string &name, const int *health)
+{
+  if (const ecs::OnAppear *updateEvent = event.cast<ecs::OnAppear>())
+    printf("appear_disapper_event OnAppear [%s] %d\n", name.c_str(), health ? *health : -1);
+  else if (const ecs::OnDisappear *heavyEvent = event.cast<ecs::OnDisappear>())
+    printf("appear_disapper_event OnDisappear [%s] %d\n", name.c_str(), health ? *health : -1);
 }
 
 struct UpdateEvent
@@ -283,7 +303,7 @@ int main()
   ecs::send_event(mgr, HeavyEvent{data});
   ecs::perform_delayed_events(mgr);
 
-
+  ecs::destroy_entities(mgr);
 
   return 0;
 }

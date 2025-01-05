@@ -37,6 +37,18 @@ namespace ecs_details
       return entityId;
     }
 
+    std::vector<ecs::EntityId> create_entities(ecs::ArchetypeId archetypeId, uint32_t firstComponentIndex, uint32_t count)
+    {
+      std::vector<ecs::EntityId> entityIds(count);
+      for (uint32_t i = 0; i < count; i++)
+      {
+        entityIds[i].entityIndex = entityRecords.size();
+        entityIds[i].generation = 0;
+        entityRecords.push_back({archetypeId, firstComponentIndex + i, entityIds[i].generation, true});
+      }
+      return entityIds;
+    }
+
     bool is_alive(ecs::EntityId entityId) const
     {
       return entityId.entityIndex < entityRecords.size() && entityRecords[entityId.entityIndex].generation == entityId.generation;

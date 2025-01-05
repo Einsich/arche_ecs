@@ -619,12 +619,21 @@ static void fill_common_query_part(
         "    query.querySignature =\n",
         query_type, descr.unique_name.c_str());
   fill_arguments(outFile, descr.args, is_event);
-  write(outFile,
+
+  if (!descr.req_args.empty())
+  {
+    write(outFile,
         "    query.requireComponents =\n");
-  fill_required_arguments(outFile, descr.req_args);
-  write(outFile,
+    fill_required_arguments(outFile, descr.req_args);
+  }
+
+  if (!descr.req_not_args.empty())
+  {
+    write(outFile,
         "    query.excludeComponents =\n");
-  fill_required_arguments(outFile, descr.req_not_args);
+    fill_required_arguments(outFile, descr.req_not_args);
+  }
+
 }
 
 static void fill_query_end(std::ofstream &outFile, const char *register_func)

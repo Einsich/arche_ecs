@@ -1,6 +1,7 @@
 #include "ecs/ecs_manager.h"
 #include "ecs/codegen_helpers.h"
 #include "ecs/type_declaration_helper.h"
+#include "ecs/builtin_events.h"
 
 #include <span>
 #include <assert.h>
@@ -14,6 +15,8 @@ namespace ecs_details
 
 namespace ecs
 {
+
+static void perform_event_immediate(EcsManager &mgr, ArchetypeId archetypeId, uint32_t componentIdx, EventId event_id, const void *event_ptr);
 
 EcsManager::EcsManager()
 {
@@ -71,6 +74,10 @@ static ecs::EntityId create_entity(EcsManager &mgr, ArchetypeId archetypeId, con
   // can be not equal if template has unregistered components. Not terrible, but not good. In this case, we should skip them
   assert(archetype.type.size() <= template_init.size());
   ecs_details::add_entity_to_archetype(archetype, mgr.typeMap, template_init, std::move(override_list));
+
+  const OnAppear event;
+  perform_event_immediate(mgr, archetypeId, entityIndex, ecs::EventInfo<OnAppear>::eventId, &event);
+
   return eid;
 }
 
@@ -95,19 +102,20 @@ static std::vector<EntityId> create_entities(EcsManager &mgr, ArchetypeId archet
     return {};
   }
   ecs_details::Archetype &archetype = *it->second;
-  int requiredEntityCount = override_soa_list.size();
-  std::vector<EntityId> eids;
-  eids.reserve(requiredEntityCount);
+  uint32_t requiredEntityCount = override_soa_list.size();
   uint32_t entityIndex = archetype.entityCount;
-  for (int i = 0; i < requiredEntityCount; i++)
-  {
-    eids.push_back(mgr.entityContainer.create_entity(archetypeId, entityIndex + i));
-  }
+  std::vector<EntityId> eids = mgr.entityContainer.create_entities(archetypeId, entityIndex, requiredEntityCount);
 
   // need to create copy to return list of eids
   override_soa_list.push_back(ecs::ComponentSoaInit(mgr.eidComponentId, std::vector<EntityId>(eids)));
   assert(archetype.type.size() == template_init.size());
   ecs_details::add_entities_to_archetype(archetype, mgr.typeMap, template_init, std::move(override_soa_list));
+
+  const OnAppear event;
+  for (uint32_t i = 0; i < requiredEntityCount; i++)
+  {
+    perform_event_immediate(mgr, archetypeId, entityIndex + i, ecs::EventInfo<OnAppear>::eventId, &event);
+  }
   return eids;
 }
 
@@ -135,6 +143,9 @@ bool destroy_entity(EcsManager &mgr, ecs::EntityId eid)
       printf("Archetype not found\n");
       return false;
     }
+    const OnDisappear event;
+    perform_event_immediate(mgr, archetypeId, componentIndex, ecs::EventInfo<OnDisappear>::eventId, &event);
+
     ecs_details::Archetype &archetype = *it->second;
     ecs_details::remove_entity_from_archetype(archetype, mgr.typeMap, componentIndex);
     mgr.entityContainer.destroy_entity(eid);
@@ -163,32 +174,37 @@ void perform_event_immediate(EcsManager &mgr, EventId event_id, const void *even
   }
 }
 
+static void perform_event_immediate(EcsManager &mgr, ArchetypeId archetypeId, uint32_t componentIdx, EventId event_id, const void *event_ptr)
+{
+  auto it = mgr.eventIdToHandlers.find(event_id);
+  if (it != mgr.eventIdToHandlers.end())
+  {
+    for (NameHash queryId : it->second)
+    {
+      auto hndlIt = mgr.events.find(queryId);
+      if (hndlIt != mgr.events.end())
+      {
+        EventHandler &handler = hndlIt->second;
+        auto ait = handler.archetypesCache.find(archetypeId);
+        if (ait != handler.archetypesCache.end())
+        {
+          const auto &archetypeRecord = ait->second;
+          ecs_details::Archetype &archetype = *archetypeRecord.archetype;
+          const ecs::ToComponentMap &toComponentIndex = archetypeRecord.toComponentIndex;
+          handler.unicastEvent(archetype, toComponentIndex, componentIdx, event_id, event_ptr);
+        }
+      }
+    }
+  }
+}
+
 void perform_event_immediate(EcsManager &mgr, EntityId eid, EventId event_id, const void *event_ptr)
 {
   ArchetypeId archetypeId;
   uint32_t componentIdx;
   if (mgr.entityContainer.get(eid, archetypeId, componentIdx))
   {
-    auto it = mgr.eventIdToHandlers.find(event_id);
-    if (it != mgr.eventIdToHandlers.end())
-    {
-      for (NameHash queryId : it->second)
-      {
-        auto hndlIt = mgr.events.find(queryId);
-        if (hndlIt != mgr.events.end())
-        {
-          EventHandler &handler = hndlIt->second;
-          auto ait = handler.archetypesCache.find(archetypeId);
-          if (ait != handler.archetypesCache.end())
-          {
-            const auto &archetypeRecord = ait->second;
-            ecs_details::Archetype &archetype = *archetypeRecord.archetype;
-            const ecs::ToComponentMap &toComponentIndex = archetypeRecord.toComponentIndex;
-            handler.unicastEvent(archetype, toComponentIndex, componentIdx, event_id, event_ptr);
-          }
-        }
-      }
-    }
+    perform_event_immediate(mgr, archetypeId, componentIdx, event_id, event_ptr);
   }
 }
 
@@ -261,6 +277,24 @@ TemplateId template_registration(EcsManager &manager, const char *_name, Initial
 TemplateId template_registration(EcsManager &manager, const char *_name, TemplateId parent_template, InitializerList &&components, ArchetypeChunkSize chunk_size_power)
 {
   return template_registration(manager, manager.eidComponentId, _name, {&parent_template, 1}, std::move(components), chunk_size_power);
+}
+
+void destroy_entities(EcsManager &mgr)
+{
+  const OnDisappear event;
+  for (const ecs_details::EntityRecord &entity : mgr.entityContainer.entityRecords)
+  {
+    if (entity.isAlive)
+    {
+      perform_event_immediate(mgr, entity.archetypeId, entity.componentIndex, ecs::EventInfo<OnDisappear>::eventId, &event);
+    }
+  }
+  for (auto &[id, archetype] : mgr.archetypeMap)
+  {
+    ecs_details::destroy_all_entities_from_archetype(*archetype, mgr.typeMap);
+  }
+  mgr.entityContainer.entityRecords.clear();
+  mgr.entityContainer.freeIndices.clear();
 }
 
 } // namespace ecs

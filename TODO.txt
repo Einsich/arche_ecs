@@ -1,15 +1,9 @@
 ========================================
-1) Perf Tests
-2) Archetype layout
-3) Query implementation & caching scetch
-4) TypeDeclaration
-========================================
-1) Type registration
-2) ComponentDeclaration
-3) Archetype creation
-4) Archetype and query/system matching
-5) Entity creation, ComponentInitializer
-========================================
-1) EntityId
-2) Resizable component container
-3) Templates
+1) on_appear, on_disappear events (done partially, depends on 3 punkt)
+2) systems ordering, before and after
+3) add/remove templates/components
+4) track events
+5) uncopyable component creation (for templates)
+6) singleton types
+7) get/set component by eid
+8) async entity creation

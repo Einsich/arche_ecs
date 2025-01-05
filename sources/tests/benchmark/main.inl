@@ -583,4 +583,5 @@ void ecs_test(std::ofstream &benchmark_file, int TESTS_COUNT, int N)
     }
     benchmark_file << timer.stop() << ";";
   }
+  ecs::destroy_entities(mgr);
 }

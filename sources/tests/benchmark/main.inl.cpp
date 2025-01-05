@@ -64,12 +64,6 @@ static void ecs_registration(ecs::EcsManager &mgr)
     {
       {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "position"), ecs::Query::ComponentAccess::READ_WRITE}
     };
-    query.requireComponents =
-    {
-    };
-    query.excludeComponents =
-    {
-    };
     ecs::register_query(mgr, std::move(query));
   }
   {
@@ -80,12 +74,6 @@ static void ecs_registration(ecs::EcsManager &mgr)
     {
       {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "position"), ecs::Query::ComponentAccess::READ_WRITE},
       {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "velocity"), ecs::Query::ComponentAccess::READ_ONLY}
-    };
-    query.requireComponents =
-    {
-    };
-    query.excludeComponents =
-    {
     };
     ecs::register_query(mgr, std::move(query));
   }
@@ -99,12 +87,6 @@ static void ecs_registration(ecs::EcsManager &mgr)
       {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "velocity"), ecs::Query::ComponentAccess::READ_WRITE},
       {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "acceleration"), ecs::Query::ComponentAccess::READ_ONLY}
     };
-    query.requireComponents =
-    {
-    };
-    query.excludeComponents =
-    {
-    };
     ecs::register_query(mgr, std::move(query));
   }
   {
@@ -114,12 +96,6 @@ static void ecs_registration(ecs::EcsManager &mgr)
     query.querySignature =
     {
       {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "position"), ecs::Query::ComponentAccess::READ_WRITE}
-    };
-    query.requireComponents =
-    {
-    };
-    query.excludeComponents =
-    {
     };
     query.update_archetype = system_perf_test1_implementation;
     ecs::register_system(mgr, std::move(query));
@@ -133,12 +109,6 @@ static void ecs_registration(ecs::EcsManager &mgr)
       {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "position"), ecs::Query::ComponentAccess::READ_WRITE},
       {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "velocity"), ecs::Query::ComponentAccess::READ_ONLY}
     };
-    query.requireComponents =
-    {
-    };
-    query.excludeComponents =
-    {
-    };
     query.update_archetype = system_perf_test2_implementation;
     ecs::register_system(mgr, std::move(query));
   }
@@ -151,12 +121,6 @@ static void ecs_registration(ecs::EcsManager &mgr)
       {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "position"), ecs::Query::ComponentAccess::READ_WRITE},
       {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "velocity"), ecs::Query::ComponentAccess::READ_WRITE},
       {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "acceleration"), ecs::Query::ComponentAccess::READ_ONLY}
-    };
-    query.requireComponents =
-    {
-    };
-    query.excludeComponents =
-    {
     };
     query.update_archetype = system_perf_test3_implementation;
     ecs::register_system(mgr, std::move(query));

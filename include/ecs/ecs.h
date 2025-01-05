@@ -2,11 +2,14 @@
 
 #include "ecs_manager.h"
 #include "ecs/type_declaration_helper.h"
+#include "ecs/builtin_events.h"
 #include "codegen_attributes.h"
 
 namespace ecs
 {
+
 void register_all_codegen_files(ecs::EcsManager &mgr);
+
 void register_all_type_declarations(ecs::EcsManager &mgr);
 
 ecs::EntityId create_entity(EcsManager &mgr, TemplateId templateId, InitializerList &&init_list = {});
@@ -15,7 +18,7 @@ std::vector<EntityId> create_entities(EcsManager &mgr, TemplateId templateId, In
 
 bool destroy_entity(EcsManager &mgr, ecs::EntityId eid);
 
-
+void destroy_entities(EcsManager &mgr);
 
 TemplateId template_registration(EcsManager &manager, const char *_name, InitializerList &&components, ArchetypeChunkSize chunk_size_power = ArchetypeChunkSize::Thousands);
 
@@ -33,6 +36,7 @@ inline void send_event_immediate(EcsManager &mgr, const T &event)
 {
   perform_event_immediate(mgr, ecs::EventInfo<T>::eventId, &event);
 }
+
 template <typename T>
 void send_event_immediate(EcsManager &mgr, ecs::EntityId eid, const T &event)
 {

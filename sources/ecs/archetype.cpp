@@ -168,7 +168,7 @@ static void register_archetype(ecs::EcsManager &mgr, ecs_details::Archetype &&ar
   {
     try_registrate(query, archetypePtr.get());
   }
-  for (auto &[id, query] : mgr.systems)
+  for (auto &query : mgr.systems)
   {
     try_registrate(query, archetypePtr.get());
   }

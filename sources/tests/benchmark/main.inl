@@ -442,16 +442,16 @@ ECS_TYPE_REGISTRATION(int)
 ECS_TYPE_REGISTRATION(float3)
 ECS_TYPE_REGISTRATION(std::string)
 
-static ecs::NameHash find_system_by_name(ecs::EcsManager &mgr, const char *name)
+static ecs::System *find_system_by_name(ecs::EcsManager &mgr, const char *name)
 {
-  for (const auto &system : mgr.systems)
+  for (auto &system : mgr.systems)
   {
-    if (system.second.uniqueName.find(name) != std::string::npos)
+    if (system.name == name)
     {
-      return system.first;
+      return &system;
     }
   }
-  return 0;
+  return nullptr;
 }
 
 void ecs_test(std::ofstream &benchmark_file, int TESTS_COUNT, int N)
@@ -461,6 +461,9 @@ void ecs_test(std::ofstream &benchmark_file, int TESTS_COUNT, int N)
   ecs::register_all_type_declarations(mgr);
 
   ecs::register_all_codegen_files(mgr);
+
+  ecs::sort_systems(mgr);
+
   ecs::TemplateId bodyTemplate = template_registration(mgr, "body",
     {{
       {mgr, "position", float3{}},
@@ -542,44 +545,29 @@ void ecs_test(std::ofstream &benchmark_file, int TESTS_COUNT, int N)
   }
 
   {
-    ecs::NameHash system_perf_test1 = find_system_by_name(mgr, "system_perf_test1");
+    ecs::System *system_perf_test1 = find_system_by_name(mgr, "system_perf_test1");
     Timer timer("system_perf_test1");
     for (int j = 0 ; j < TESTS_COUNT; j++)
     {
-      auto it = mgr.systems.find(system_perf_test1);
-      if (it != mgr.systems.end())
-      {
-        ecs::System &system = it->second;
-        ecs::perform_system(system);
-      }
+      ecs::perform_system(*system_perf_test1);
     }
     benchmark_file << timer.stop() << ";";
   }
   {
-    ecs::NameHash system_perf_test2 = find_system_by_name(mgr, "system_perf_test2");
+    ecs::System *system_perf_test2 = find_system_by_name(mgr, "system_perf_test2");
     Timer timer("system_perf_test2");
     for (int j = 0 ; j < TESTS_COUNT; j++)
     {
-      auto it = mgr.systems.find(system_perf_test2);
-      if (it != mgr.systems.end())
-      {
-        ecs::System &system = it->second;
-        ecs::perform_system(system);
-      }
+      ecs::perform_system(*system_perf_test2);
     }
     benchmark_file << timer.stop() << ";";
   }
   {
-    ecs::NameHash system_perf_test3 = find_system_by_name(mgr, "system_perf_test3");
+    ecs::System *system_perf_test3 = find_system_by_name(mgr, "system_perf_test3");
     Timer timer("system_perf_test3");
     for (int j = 0 ; j < TESTS_COUNT; j++)
     {
-      auto it = mgr.systems.find(system_perf_test3);
-      if (it != mgr.systems.end())
-      {
-        ecs::System &system = it->second;
-        ecs::perform_system(system);
-      }
+      ecs::perform_system(*system_perf_test3);
     }
     benchmark_file << timer.stop() << ";";
   }

@@ -12,6 +12,8 @@ void register_all_codegen_files(ecs::EcsManager &mgr);
 
 void register_all_type_declarations(ecs::EcsManager &mgr);
 
+void sort_systems(EcsManager &mgr);
+
 ecs::EntityId create_entity(EcsManager &mgr, TemplateId templateId, InitializerList &&init_list = {});
 
 std::vector<EntityId> create_entities(EcsManager &mgr, TemplateId templateId, InitializerSoaList &&init_soa_list);

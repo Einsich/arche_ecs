@@ -47,17 +47,17 @@ void query_by_eid_test(ecs::EcsManager &mgr, const std::vector<ecs::EntityId> &e
   }
 }
 
-ECS_EVENT() on_appear_event(const ecs::OnAppear &, const std::string &name, const int *health)
+ECS_EVENT(before=appear_disapper_event) on_appear_event(const ecs::OnAppear &, const std::string &name, const int *health)
 {
   printf("on_appear_event [%s] %d\n", name.c_str(), health ? *health : -1);
 }
 
-ECS_EVENT() on_disappear_event(const ecs::OnDisappear &, const std::string &name, const int *health)
+ECS_EVENT(before=appear_disapper_event) on_disappear_event(const ecs::OnDisappear &, const std::string &name, const int *health)
 {
   printf("on_disappear_event [%s] %d\n", name.c_str(), health ? *health : -1);
 }
 
-ECS_EVENT(on_event=ecs::OnAppear, ecs::OnDisappear)
+ECS_EVENT(on_event=ecs::OnAppear, ecs::OnDisappear; after=on_appear_event, on_disappear_event)
 appear_disapper_event(const ecs::Event &event, const std::string &name, const int *health)
 {
   if (const ecs::OnAppear *updateEvent = event.cast<ecs::OnAppear>())
@@ -123,6 +123,8 @@ int main()
   ecs::register_all_type_declarations(mgr);
 
   ecs::register_all_codegen_files(mgr);
+
+  ecs::sort_systems(mgr);
 
   for (const auto &[id, type] : mgr.typeMap)
   {
@@ -274,7 +276,7 @@ int main()
 
   // assert(mgr.destroy_entity(eid1));
 
-  for (auto &[hashId, system] : mgr.systems)
+  for (auto &system : mgr.systems)
   {
     ecs::perform_system(system);
   }

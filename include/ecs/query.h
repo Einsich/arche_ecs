@@ -33,6 +33,7 @@ struct Query
     ComponentAccess access;
   };
 
+  std::string name;
   std::string uniqueName;
   NameHash nameHash;
   std::vector<ComponentAccessInfo> querySignature;
@@ -40,7 +41,10 @@ struct Query
   std::vector<ComponentId> requireComponents; // components without reading access
   std::vector<ComponentId> excludeComponents;
 
-   ska::flat_hash_map<ArchetypeId, ArchetypeRecord> archetypesCache;
+  std::vector<std::string> before;
+  std::vector<std::string> after;
+
+  ska::flat_hash_map<ArchetypeId, ArchetypeRecord> archetypesCache;
 };
 
 struct System final : public Query

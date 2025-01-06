@@ -58,6 +58,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
   ECS_UNUSED(mgr);
   {
     ecs::Query query;
+    query.name = "query_perf_test1";
     query.uniqueName = "sources/tests/benchmark/main.inl:416[query_perf_test1]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
@@ -68,6 +69,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
   }
   {
     ecs::Query query;
+    query.name = "query_perf_test2";
     query.uniqueName = "sources/tests/benchmark/main.inl:424[query_perf_test2]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
@@ -79,6 +81,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
   }
   {
     ecs::Query query;
+    query.name = "query_perf_test3";
     query.uniqueName = "sources/tests/benchmark/main.inl:432[query_perf_test3]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
@@ -91,6 +94,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
   }
   {
     ecs::System query;
+    query.name = "system_perf_test1";
     query.uniqueName = "sources/tests/benchmark/main.inl:397[system_perf_test1]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
@@ -102,6 +106,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
   }
   {
     ecs::System query;
+    query.name = "system_perf_test2";
     query.uniqueName = "sources/tests/benchmark/main.inl:403[system_perf_test2]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
@@ -114,6 +119,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
   }
   {
     ecs::System query;
+    query.name = "system_perf_test3";
     query.uniqueName = "sources/tests/benchmark/main.inl:408[system_perf_test3]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =

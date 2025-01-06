@@ -605,6 +605,22 @@ static void fill_string_array(std::ofstream &outFile, const std::vector<std::str
   write(outFile, "},\n");
 }
 
+static void fill_string_array(std::ofstream &outFile, const char *field, const std::vector<std::string> &args)
+{
+  if (args.empty())
+  {
+    return;
+  }
+  write(outFile, field);
+  for (const std::string &str : args)
+  {
+    write(outFile,
+          "\"%s\", ",
+          str.c_str());
+  }
+  write(outFile, "};\n");
+}
+
 static void fill_common_query_part(
     std::ofstream &outFile,
     const ParserSystemDescription &descr,
@@ -614,10 +630,11 @@ static void fill_common_query_part(
   write(outFile,
         "  {\n"
         "    %s query;\n"
+        "    query.name = \"%s\";\n"
         "    query.uniqueName = \"%s\";\n"
         "    query.nameHash = ecs::hash(query.uniqueName.c_str());\n"
         "    query.querySignature =\n",
-        query_type, descr.unique_name.c_str());
+        query_type, descr.sys_name.c_str(), descr.unique_name.c_str());
   fill_arguments(outFile, descr.args, is_event);
 
   if (!descr.req_args.empty())
@@ -664,8 +681,8 @@ void register_systems(std::ofstream &outFile, const std::vector<ParserSystemDesc
           "    query.update_archetype = %s_implementation;\n",
           name);
     // write(outFile, "  \"%s\",\n", query.stage.c_str());
-    // fill_string_array(outFile, query.before);
-    // fill_string_array(outFile, query.after);
+    fill_string_array(outFile, "    query.before = {", query.before);
+    fill_string_array(outFile, "    query.after = {", query.after);
     // fill_string_array(outFile, query.tags);
     // write(outFile, "  &%s_implementation);\n\n", name);
     fill_query_end(outFile, "ecs::register_system");
@@ -681,13 +698,15 @@ void register_events(std::ofstream &outFile, const std::vector<ParserSystemDescr
     const bool isAbstractEvent = query.args[0].type == "ecs::Event";
 
     fill_common_query_part(outFile, query, "ecs::EventHandler", true);
+    fill_string_array(outFile, "    query.before = {", query.before);
+    fill_string_array(outFile, "    query.after = {", query.after);
     write(outFile,
           "    query.broadcastEvent = %s_broadcast_event;\n"
           "    query.unicastEvent = %s_unicast_event;\n",
           name, name, event_type);
     if (isAbstractEvent)
     {
-        write(outFile,
+      write(outFile,
           "    query.eventIds = {");
       for (uint i = 0; i < query.on_event.size(); i++)
       {
@@ -704,8 +723,6 @@ void register_events(std::ofstream &outFile, const std::vector<ParserSystemDescr
           event_type);
     }
 
-    // fill_string_array(outFile, query.before);
-    // fill_string_array(outFile, query.after);
     // fill_string_array(outFile, query.tags);
     // write(outFile,
     //       "  &%s_handler, &%s_single_handler,\n"

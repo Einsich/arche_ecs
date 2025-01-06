@@ -123,6 +123,8 @@ void entity_creation_test(std::ofstream &benchmark_file, int N)
 
   ecs::register_all_codegen_files(mgr);
 
+  ecs::sort_systems(mgr);
+
   ecs::TemplateId bodyTemplate = template_registration(mgr, "body",
     {{
       {mgr, "position", float3{}},

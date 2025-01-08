@@ -26,7 +26,6 @@ inline constexpr ComponentId get_component_id(const char *type_name, const char 
   return hash(component_name, typeWithSpace);
 }
 
-using ComponentDeclarationMap = ska::flat_hash_map<ComponentId, std::unique_ptr<ComponentDeclaration>>;
 
 struct EcsManager;
 

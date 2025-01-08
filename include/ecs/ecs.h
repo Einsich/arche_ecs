@@ -50,9 +50,8 @@ void send_event(EcsManager &mgr, T &&event)
 {
   static_assert(std::is_rvalue_reference<decltype(event)>::value);
   EcsManager::DelayedEvent delayedEvent;
-  delayedEvent.eventData = ComponentData(std::move(event));
+  delayedEvent.eventData = ecs::Any(std::move(event), ecs::EventInfo<T>::eventId);
   delayedEvent.broadcastEvent = true;
-  delayedEvent.eventId = ecs::EventInfo<T>::eventId;
   mgr.delayedEvents.push_back(std::move(delayedEvent));
 }
 
@@ -61,9 +60,8 @@ void send_event(EcsManager &mgr, ecs::EntityId eid, T &&event)
 {
   static_assert(std::is_rvalue_reference<decltype(event)>::value);
   EcsManager::DelayedEvent delayedEvent;
-  delayedEvent.eventData = ComponentData(std::move(event));
+  delayedEvent.eventData = ecs::Any(std::move(event), ecs::EventInfo<T>::eventId);
   delayedEvent.broadcastEvent = false;
-  delayedEvent.eventId = ecs::EventInfo<T>::eventId;
   delayedEvent.entityId = eid;
   mgr.delayedEvents.push_back(std::move(delayedEvent));
 }

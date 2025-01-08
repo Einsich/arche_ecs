@@ -13,15 +13,15 @@ using MoveConstructor = void (*)(void *dest, void *src);
 struct TypeDeclaration
 {
   std::string typeName;
-  TypeId typeId;
-  uint32_t sizeOfElement;
-  uint32_t alignmentOfElement;
-  bool isTriviallyRelocatable;
+  TypeId typeId = 0;
+  uint32_t sizeOfElement = 0;
+  uint32_t alignmentOfElement = 1;
+  bool isTriviallyRelocatable = false;
 
-  DefaultConstructor construct_default;
-  Destructor destruct;
-  CopyConstructor copy_construct;
-  MoveConstructor move_construct;
+  DefaultConstructor construct_default = nullptr;
+  Destructor destruct = nullptr;
+  CopyConstructor copy_construct = nullptr;
+  MoveConstructor move_construct = nullptr;
 };
 
 using TypeDeclarationMap = ska::flat_hash_map<TypeId, TypeDeclaration>;

@@ -44,6 +44,7 @@ TypeDeclaration create_type_declaration()
   type_declaration.alignmentOfElement = alignof(T);
   type_declaration.construct_default = ecs_details::construct_default<T>;
   type_declaration.destruct = ecs_details::destruct<T>;
+  // if constexpr (std::is_copy_constructible_v<T>)
   type_declaration.copy_construct = ecs_details::copy_construct<T>;
   type_declaration.move_construct = ecs_details::move_construct<T>;
   return type_declaration;

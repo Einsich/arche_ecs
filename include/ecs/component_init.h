@@ -1,5 +1,6 @@
 #pragma once
 #include "ecs/config.h"
+#include "ecs/any.h"
 
 namespace ecs
 {
@@ -7,168 +8,6 @@ namespace ecs
   struct EcsManager;
   ComponentId get_or_add_component(EcsManager &manager, TypeId typeId, const char *component_name);
 
-  struct ComponentData
-  {
-
-    template <typename T>
-    static void Destructor(void *data)
-    {
-      ((T *)data)->~T();
-    }
-    template <typename T>
-    static void DeleteDestructor(void *data)
-    {
-      delete ((T *)data);
-    }
-    template <typename T>
-    static void * CopyConstructor(const void *src_data)
-    {
-      return new T(*(T *)src_data);
-    }
-    template <typename T>
-    static void CopyConstructorInplace(void *dst_data, const void *src_data)
-    {
-      new(dst_data) T(*(T *)src_data);
-    }
-    static constexpr int SBO_ALIGNMENT = 32;
-    static constexpr int SBO_SIZE = 32;
-    struct Stack
-    {
-      alignas(SBO_ALIGNMENT) char data[SBO_SIZE];
-      void (*destructor)(void *data);
-      void (*copy_constructor)(void *dst_data, const void *src_data);
-    };
-    struct Heap
-    {
-      void *data;
-      void (*destructor)(void *data);
-      void *(*copy_constructor)(const void *src_data);
-    };
-    union Sbo
-    {
-      Stack stack;
-      Heap heap;
-    } sbo;
-
-    enum class Type : uint8_t
-    {
-      None,
-      Stack,
-      Heap
-    } type = Type::None;
-
-    ComponentData() = default;
-
-    template<typename T>
-    ComponentData(T &&data)
-    {
-      if constexpr (sizeof(T) <= SBO_SIZE && alignof(T) <= SBO_ALIGNMENT)
-      {
-        new (sbo.stack.data) T(std::move(data));
-        sbo.stack.destructor = Destructor<T>;
-        sbo.stack.copy_constructor = CopyConstructorInplace<T>;
-        type = Type::Stack;
-      }
-      else
-      {
-        sbo.heap.data = new T(std::move(data));
-        sbo.heap.destructor = DeleteDestructor<T>;
-        sbo.heap.copy_constructor = CopyConstructor<T>;
-        type = Type::Heap;
-      }
-    }
-
-    void orphan()
-    {
-      type = Type::None;
-    }
-
-    ~ComponentData()
-    {
-      if (type == Type::Stack)
-      {
-        sbo.stack.destructor(sbo.stack.data);
-      }
-      else if (type == Type::Heap)
-      {
-        sbo.heap.destructor(sbo.heap.data);
-      }
-    }
-
-    ComponentData(ComponentData &&other)
-    {
-      if (other.type == Type::Stack)
-      {
-        sbo.stack = other.sbo.stack;
-        type = Type::Stack;
-      }
-      else if (other.type == Type::Heap)
-      {
-        sbo.heap = other.sbo.heap;
-        type = Type::Heap;
-      }
-      other.type = Type::None;
-    }
-
-    ComponentData copy() const
-    {
-      ComponentData copy;
-      if (type == Type::Stack)
-      {
-        copy.sbo.stack.copy_constructor = sbo.stack.copy_constructor;
-        copy.sbo.stack.destructor = sbo.stack.destructor;
-        sbo.stack.copy_constructor(copy.sbo.stack.data, sbo.stack.data);
-        copy.type = Type::Stack;
-      }
-      else if (type == Type::Heap)
-      {
-        copy.sbo.heap.copy_constructor = sbo.heap.copy_constructor;
-        copy.sbo.heap.destructor = sbo.heap.destructor;
-        copy.sbo.heap.data = sbo.heap.copy_constructor(sbo.heap.data);
-        copy.type = Type::Heap;
-      }
-      return copy;
-    }
-
-    ComponentData &operator=(ComponentData &&other)
-    {
-      if (this != &other)
-      {
-        this->~ComponentData();
-        new (this) ComponentData(std::move(other));
-      }
-      return *this;
-    }
-
-    ComponentData(const ComponentData &other) = delete;
-
-    ComponentData &operator=(const ComponentData &other) = delete;
-
-    void *data()
-    {
-      if (type == Type::Stack)
-      {
-        return sbo.stack.data;
-      }
-      else if (type == Type::Heap)
-      {
-        return sbo.heap.data;
-      }
-      return nullptr;
-    }
-    const void *data() const
-    {
-      if (type == Type::Stack)
-      {
-        return sbo.stack.data;
-      }
-      else if (type == Type::Heap)
-      {
-        return sbo.heap.data;
-      }
-      return nullptr;
-    }
-  };
 
   struct ComponentDataSoa
   {
@@ -176,6 +15,7 @@ namespace ecs
     void *vector_data_ptr;
     uint32_t m_size;
     uint32_t m_sizeof;
+    TypeId typeId;
 
     void (*destructor)(void *data);
 
@@ -195,7 +35,7 @@ namespace ecs
       delete (T *)data;
     }
     template<typename T>
-    ComponentDataSoa(std::vector<T> &&_data) : destructor(Destructor<std::vector<T>>)
+    ComponentDataSoa(std::vector<T> &&_data, TypeId type_id) : typeId(type_id), destructor(Destructor<std::vector<T>>)
     {
       m_sizeof = sizeof(T);
       auto vec = new std::vector<T>(std::move(_data));
@@ -208,6 +48,7 @@ namespace ecs
       vector_data_ptr(other.vector_data_ptr),
       m_size(other.m_size),
       m_sizeof(other.m_sizeof),
+      typeId(other.typeId),
       destructor(other.destructor)
     {
       other.vector_ptr = nullptr;
@@ -231,23 +72,66 @@ namespace ecs
       }
     }
   };
-  struct ComponentInit final : public ComponentData
+
+  struct LazyInit {};
+
+  struct ComponentInit final : public ecs::Any
   {
     ComponentId componentId;
 
-    template<typename T>
-    ComponentInit(ComponentId component_id, T &&_data) : ComponentData(std::move(_data)), componentId(component_id) {}
+    template<typename ValueType, typename T = std::remove_cvref<ValueType>::type>
+    ComponentInit(ComponentId component_id, ValueType &&_data) :
+        ecs::Any(std::move(_data), ecs::TypeInfo<T>::typeId), componentId(component_id) {}
 
-    template<typename T>
-    ComponentInit(const char *component_name, T &&_data) :
-        ComponentData(std::move(_data)), componentId(get_component_id(ecs::TypeInfo<T>::typeId, component_name)) {}
+    template<typename ValueType, typename T = std::remove_cvref<ValueType>::type>
+    ComponentInit(const char *component_name, ValueType &&_data) :
+        ComponentInit(get_component_id(ecs::TypeInfo<T>::typeId, component_name), std::move(_data)) {}
 
-    template<typename T>
-    ComponentInit(EcsManager &manager, const char *component_name, T &&_data) :
-        ComponentData(std::move(_data)), componentId(get_or_add_component(manager, ecs::TypeInfo<T>::typeId, component_name)) {}
+    template<typename ValueType, typename T = std::remove_cvref<ValueType>::type>
+    ComponentInit(EcsManager &manager, const char *component_name, ValueType &&_data) :
+        ComponentInit(get_or_add_component(manager, ecs::TypeInfo<T>::typeId, component_name), std::move(_data)) {}
+
+    template<typename ValueType>
+    ComponentInit(ComponentId component_id, const ValueType&_data) :
+        ecs::Any(_data, ecs::TypeInfo<T>::typeId), componentId(component_id) {}
+
+    template<typename ValueType>
+    ComponentInit(const char *component_name, const ValueType &_data) :
+        ComponentInit(get_component_id(ecs::TypeInfo<T>::typeId, component_name), _data) {}
+
+    template<typename ValueType>
+    ComponentInit(EcsManager &manager, const char *component_name, const ValueType &_data) :
+        ComponentInit(get_or_add_component(manager, ecs::TypeInfo<T>::typeId, component_name), _data) {}
 
 
-    ComponentInit(ComponentInit &&other) : ComponentData(static_cast<ComponentData&&>(std::move(other))), componentId(other.componentId)
+    template<typename ValueType, typename T = std::remove_cvref<ValueType>::type>
+    ComponentInit(ComponentId component_id, ecs::LazyInit, ValueType &&_data) :
+        ecs::Any(std::move(_data), ecs::LazyInitTypeBind<T>::typeId), componentId(component_id) {}
+
+    template<typename ValueType, typename T = std::remove_cvref<ValueType>::type>
+    ComponentInit(const char *component_name, ecs::LazyInit, ValueType &&_data) :
+        ComponentInit(get_component_id(ecs::LazyInitTypeBind<T>::typeId, component_name), std::move(_data)) {}
+
+    template<typename ValueType, typename T = std::remove_cvref<ValueType>::type>
+    ComponentInit(EcsManager &manager, const char *component_name, ecs::LazyInit, ValueType &&_data) :
+        ComponentInit(get_or_add_component(manager, ecs::LazyInitTypeBind<T>::typeId, component_name), std::move(_data)) {}
+
+    template<typename ValueType>
+    ComponentInit(ComponentId component_id, ecs::LazyInit, const ValueType&_data) :
+        ecs::Any(_data, ecs::LazyInitTypeBind<T>::typeId), componentId(component_id) {}
+
+    template<typename ValueType>
+    ComponentInit(const char *component_name, ecs::LazyInit, const ValueType &_data) :
+        ComponentInit(get_component_id(ecs::LazyInitTypeBind<T>::typeId, component_name), _data) {}
+
+    template<typename ValueType>
+    ComponentInit(EcsManager &manager, const char *component_name, ecs::LazyInit, const ValueType &_data) :
+        ComponentInit(get_or_add_component(manager, ecs::LazyInitTypeBind<T>::typeId, component_name), _data) {}
+
+    ComponentInit(ComponentId component_id, ecs::Any &&_data) :
+        ecs::Any(std::move(_data)), componentId(component_id) {}
+
+    ComponentInit(ComponentInit &&other) : ecs::Any(static_cast<ecs::Any&&>(std::move(other))), componentId(other.componentId)
     {
       other.componentId = {};
     }
@@ -262,15 +146,15 @@ namespace ecs
     ComponentId componentId;
 
     template<typename T>
-    ComponentSoaInit(ComponentId component_id, std::vector<T> &&_data) : ComponentDataSoa(std::move(_data)), componentId(component_id) {}
+    ComponentSoaInit(ComponentId component_id, std::vector<T> &&_data) : ComponentDataSoa(std::move(_data), ecs::TypeInfo<T>::typeId), componentId(component_id) {}
 
     template<typename T>
     ComponentSoaInit(const char *component_name, std::vector<T> &&_data) :
-        ComponentDataSoa(std::move(_data)), componentId(get_component_id(ecs::TypeInfo<T>::typeId, component_name)) {}
+        ComponentDataSoa(std::move(_data), ecs::TypeInfo<T>::typeId), componentId(get_component_id(ecs::TypeInfo<T>::typeId, component_name)) {}
 
     template<typename T>
     ComponentSoaInit(EcsManager &manager, const char *component_name, std::vector<T> &&_data) :
-        ComponentDataSoa(std::move(_data)), componentId(get_or_add_component(manager, ecs::TypeInfo<T>::typeId, component_name)) {}
+        ComponentDataSoa(std::move(_data), ecs::TypeInfo<T>::typeId), componentId(get_or_add_component(manager, ecs::TypeInfo<T>::typeId, component_name)) {}
 
     ComponentSoaInit(ComponentSoaInit &&other) : ComponentDataSoa(std::move(other)), componentId(other.componentId)
     {
@@ -284,7 +168,7 @@ namespace ecs
 
   struct InitializerList
   {
-    ska::flat_hash_map<ComponentId, ecs::ComponentData> args;
+    ska::flat_hash_map<ComponentId, ecs::Any> args;
 
     InitializerList() = default;
 
@@ -294,13 +178,13 @@ namespace ecs
       args.reserve(N + 1 /*entityId*/);
       for (size_t i = 0; i < N; i++)
       {
-        args.insert({_args[i].componentId, std::move(static_cast<ComponentData &&>(_args[i]))});
+        args.insert({_args[i].componentId, std::move(static_cast<ecs::Any &&>(_args[i]))});
       }
     }
 
     void push_back(ecs::ComponentInit &&componentInit)
     {
-      args.insert({componentInit.componentId, std::move(static_cast<ComponentData &&>(componentInit))});
+      args.insert({componentInit.componentId, std::move(static_cast<ecs::Any &&>(componentInit))});
     }
 
     void reserve(size_t count)

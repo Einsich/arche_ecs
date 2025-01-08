@@ -10,7 +10,7 @@ ECS_TYPE_DECLARATION_ALIAS(ecs::EntityId, "EntityId")
 
 namespace ecs_details
 {
-  ecs::ArchetypeId get_or_create_archetype(ecs::EcsManager &mgr, const ecs::InitializerList &components, ecs::ArchetypeChunkSize chunk_size_power, const char *template_name);
+  ecs::ArchetypeId get_or_create_archetype(ecs::EcsManager &mgr, ecs::InitializerList &components, ecs::ArchetypeChunkSize chunk_size_power, const char *template_name);
 }
 
 namespace ecs
@@ -73,7 +73,7 @@ static ecs::EntityId create_entity(EcsManager &mgr, ArchetypeId archetypeId, con
   override_list.push_back(ecs::ComponentInit(mgr.eidComponentId, ecs::EntityId(eid)));
   // can be not equal if template has unregistered components. Not terrible, but not good. In this case, we should skip them
   assert(archetype.type.size() <= template_init.size());
-  ecs_details::add_entity_to_archetype(archetype, mgr.typeMap, template_init, std::move(override_list));
+  ecs_details::add_entity_to_archetype(archetype, mgr, template_init, std::move(override_list));
 
   const OnAppear event;
   perform_event_immediate(mgr, archetypeId, entityIndex, ecs::EventInfo<OnAppear>::eventId, &event);
@@ -109,7 +109,7 @@ static std::vector<EntityId> create_entities(EcsManager &mgr, ArchetypeId archet
   // need to create copy to return list of eids
   override_soa_list.push_back(ecs::ComponentSoaInit(mgr.eidComponentId, std::vector<EntityId>(eids)));
   assert(archetype.type.size() == template_init.size());
-  ecs_details::add_entities_to_archetype(archetype, mgr.typeMap, template_init, std::move(override_soa_list));
+  ecs_details::add_entities_to_archetype(archetype, mgr, template_init, std::move(override_soa_list));
 
   const OnAppear event;
   for (uint32_t i = 0; i < requiredEntityCount; i++)
@@ -214,11 +214,11 @@ void perform_delayed_events(EcsManager &mgr)
   {
     if (event.broadcastEvent)
     {
-      perform_event_immediate(mgr, event.eventId, event.eventData.data());
+      perform_event_immediate(mgr, event.eventData.typeId, event.eventData.data());
     }
     else
     {
-      perform_event_immediate(mgr, event.entityId, event.eventId, event.eventData.data());
+      perform_event_immediate(mgr, event.entityId, event.eventData.typeId, event.eventData.data());
     }
   }
   mgr.delayedEvents.clear();

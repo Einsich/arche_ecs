@@ -61,59 +61,91 @@ static void try_add_chunk(Archetype &archetype, int requiredEntityCount)
   }
 }
 
-void add_entity_to_archetype(Archetype &archetype, const ecs::TypeDeclarationMap &type_map, const ecs::InitializerList &template_init, ecs::InitializerList &&override_list)
+void add_entity_to_archetype(Archetype &archetype, const ecs::EcsManager &mgr, const ecs::InitializerList &template_init, ecs::InitializerList &&override_list)
 {
   try_add_chunk(archetype, 1);
   for (ecs_details::Collumn &collumn : archetype.collumns)
   {
-
-    const ecs::TypeDeclaration *typeDeclaration = find_type_declaration(type_map, collumn.typeId);
+    void *dstData = collumn.get_data(archetype.entityCount);
+    const ecs::TypeDeclaration *typeDeclaration = find_type_declaration(mgr.typeMap, collumn.typeId);
     // firstly check initialization data in override_list and move it
     auto it = override_list.args.find(collumn.componentId);
     if (it != override_list.args.end())
     {
-      typeDeclaration->move_construct(collumn.get_data(archetype.entityCount), it->second.data());
-      continue;
+      void *srcData = it->second.data();
+      if (srcData != nullptr)
+      {
+        if (it->second.typeId == typeDeclaration->typeId)
+        {
+          typeDeclaration->move_construct(dstData, srcData);
+          continue;
+        }
+        else
+        {
+          const char *componentName = mgr.componentMap.find(it->first)->second->name.c_str();
+          const char *receivedType = mgr.typeMap.find(it->second.typeId)->second.typeName.c_str();
+          const char *expectedType = mgr.typeMap.find(collumn.typeId)->second.typeName.c_str();
+          printf("[ECS] Error: Component %s has type %s but expected %s, during create_entity\n",
+            componentName, receivedType, expectedType);
+        }
+      }
+      else
+      {
+        typeDeclaration->construct_default(dstData);
+        continue;
+      }
     }
     // then check initialization data in template_init and copy it
     auto it2 = template_init.args.find(collumn.componentId);
     if (it2 != template_init.args.end())
     {
-      typeDeclaration->copy_construct(collumn.get_data(archetype.entityCount), it2->second.data());
+      assert(it2->second.typeId == collumn.typeId);
+      typeDeclaration->copy_construct(dstData, it2->second.data());
       continue;
     }
     // if there is no initialization data, construct default
-    typeDeclaration->construct_default(collumn.get_data(archetype.entityCount));
+    typeDeclaration->construct_default(dstData);
     // but this is error because we have to have initialization data for all components
     printf("[ECS] Error: no initialization data for component %s\n", collumn.debugName.c_str());
   }
   archetype.entityCount++;
 }
 
-void add_entities_to_archetype(Archetype &archetype, const ecs::TypeDeclarationMap &type_map, const ecs::InitializerList &template_init, ecs::InitializerSoaList &&override_soa_list)
+void add_entities_to_archetype(Archetype &archetype, const ecs::EcsManager &mgr, const ecs::InitializerList &template_init, ecs::InitializerSoaList &&override_soa_list)
 {
   int requiredEntityCount = override_soa_list.size();
   try_add_chunk(archetype, requiredEntityCount);
   for (ecs_details::Collumn &collumn : archetype.collumns)
   {
-    const ecs::TypeDeclaration *typeDeclaration = find_type_declaration(type_map, collumn.typeId);
+    const ecs::TypeDeclaration *typeDeclaration = find_type_declaration(mgr.typeMap, collumn.typeId);
 
     // firstly check initialization data in override_soa_list and move it
     auto it = override_soa_list.args.find(collumn.componentId);
     if (it != override_soa_list.args.end())
     {
       ecs::ComponentDataSoa &componentDataSoa = it->second;
-      for (int i = 0; i < requiredEntityCount; i++)
+      if (componentDataSoa.typeId == collumn.typeId)
       {
-        typeDeclaration->move_construct(collumn.get_data(archetype.entityCount + i), componentDataSoa.get_data(i));
+        for (int i = 0; i < requiredEntityCount; i++)
+        {
+          typeDeclaration->move_construct(collumn.get_data(archetype.entityCount + i), componentDataSoa.get_data(i));
+        }
+        continue;
       }
-      continue;
+      else
+      {
+        const char *componentName = mgr.componentMap.find(it->first)->second->name.c_str();
+        const char *receivedType = mgr.typeMap.find(componentDataSoa.typeId)->second.typeName.c_str();
+        const char *expectedType = mgr.typeMap.find(collumn.typeId)->second.typeName.c_str();
+        printf("[ECS] Error: Component %s has type %s but expected %s, during create_entities\n",
+          componentName, receivedType, expectedType);
+      }
     }
     // then check initialization data in template_init and copy it
     auto it2 = template_init.args.find(collumn.componentId);
     if (it2 != template_init.args.end())
     {
-      const ecs::ComponentData &componentData = it2->second;
+      const ecs::Any &componentData = it2->second;
       for (int i = 0; i < requiredEntityCount; i++)
       {
         typeDeclaration->copy_construct(collumn.get_data(archetype.entityCount + i), componentData.data());
@@ -179,22 +211,40 @@ static void register_archetype(ecs::EcsManager &mgr, ecs_details::Archetype &&ar
   mgr.archetypeMap[archetype.archetypeId] = std::move(archetypePtr);
 }
 
-ecs::ArchetypeId get_or_create_archetype(ecs::EcsManager &mgr, const ecs::InitializerList &components, ecs::ArchetypeChunkSize chunk_size_power, const char *template_name)
+ecs::ArchetypeId get_or_create_archetype(ecs::EcsManager &mgr, ecs::InitializerList &components, ecs::ArchetypeChunkSize chunk_size_power, const char *template_name)
 {
   ArchetypeComponentType type;
-  type.reserve(components.size() + 1);
-  for (const auto &[componentId, component] : components.args)
+  type.reserve(components.size());
+
+  for (auto it = components.args.begin(); it != components.args.end();)
   {
-    auto it = mgr.componentMap.find(componentId);
-    if (it != mgr.componentMap.end())
+    auto &arg = *it;
+    auto cmpIt = mgr.componentMap.find(arg.first);
+    if (cmpIt != mgr.componentMap.end())
     {
-      type[componentId] = it->second->typeId;
+      if (cmpIt->second->typeId == arg.second.typeId)
+      {
+        type.insert({arg.first, arg.second.typeId});
+        ++it;
+        continue;
+      }
+      else
+      {
+        const char *componentName = cmpIt->second->name.c_str();
+        const char *receivedType = mgr.typeMap.find(arg.second.typeId)->second.typeName.c_str();
+        const char *expectedType = mgr.typeMap.find(cmpIt->second->typeId)->second.typeName.c_str();
+        printf("[ECS] Error: Component %s has type %s but expected %s, during instantiation template \"%s\"\n",
+          componentName, receivedType, expectedType, template_name);
+      }
     }
     else
     {
-      printf("[ECS] Error: Component %x not found, during instantiation template \"%s\"\n", componentId, template_name);
-      continue;
+      const char *receivedType = mgr.typeMap.find(arg.second.typeId)->second.typeName.c_str();
+      printf("[ECS] Error: Component %x of type %s not found, during instantiation template \"%s\"\n", arg.first, receivedType, template_name);
     }
+
+    it = components.args.erase(it);
+    continue;
   }
 
   ecs::ArchetypeId archetypeId = get_archetype_id(type);

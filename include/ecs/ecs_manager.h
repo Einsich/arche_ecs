@@ -12,15 +12,16 @@
 
 namespace ecs
 {
-using TemplatesMap = ska::flat_hash_map<TemplateId, Template>;
-using ArchetypeMap = ska::flat_hash_map<ArchetypeId, std::unique_ptr<ecs_details::Archetype>>;
 
 struct EcsManager
 {
+  using ComponentDeclarationMap = ska::flat_hash_map<ComponentId, std::unique_ptr<ComponentDeclaration>>;
+  using ArchetypeMap = ska::flat_hash_map<ArchetypeId, std::unique_ptr<ecs_details::Archetype>>;
+  using TemplatesMap = ska::flat_hash_map<TemplateId, Template>;
+
   struct DelayedEvent
   {
-    ComponentData eventData;
-    EventId eventId;
+    ecs::Any eventData;
     EntityId entityId;
     bool broadcastEvent;
   };

@@ -14,13 +14,17 @@ void register_all_type_declarations(ecs::EcsManager &mgr);
 
 void sort_systems(EcsManager &mgr);
 
+ecs::EntityId create_entity_sync(EcsManager &mgr, TemplateId templateId, InitializerList &&init_list = {});
 ecs::EntityId create_entity(EcsManager &mgr, TemplateId templateId, InitializerList &&init_list = {});
 
 std::vector<EntityId> create_entities(EcsManager &mgr, TemplateId templateId, InitializerSoaList &&init_soa_list);
 
-bool destroy_entity(EcsManager &mgr, ecs::EntityId eid);
+bool destroy_entity_sync(EcsManager &mgr, ecs::EntityId eid);
+void destroy_entity(EcsManager &mgr, ecs::EntityId eid);
 
 void destroy_entities(EcsManager &mgr);
+
+void perform_delayed_entities_creation(EcsManager &mgr);
 
 TemplateId template_registration(EcsManager &manager, const char *_name, InitializerList &&components, ArchetypeChunkSize chunk_size_power = ArchetypeChunkSize::Thousands);
 

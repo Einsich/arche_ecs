@@ -106,13 +106,13 @@ int main()
   if (EntityContainerTest)
   {
     ecs_details::EntityContainer entityContainer;
-    ecs::EntityId entityId = entityContainer.create_entity(0, 0);
+    ecs::EntityId entityId = entityContainer.allocate_entity(ecs_details::EntityState::Alive);
     assert(entityContainer.is_alive(entityId));
     entityContainer.destroy_entity(entityId);
     assert(!entityContainer.is_alive(entityId));
     assert(!entityContainer.is_alive(ecs::EntityId()));
 
-    ecs::EntityId entityId1 = entityContainer.create_entity(0, 0);
+    ecs::EntityId entityId1 = entityContainer.allocate_entity(ecs_details::EntityState::Alive);
     assert(entityContainer.is_alive(entityId1));
     assert(entityId != entityId1);
     ECS_UNUSED(entityId);
@@ -167,12 +167,12 @@ int main()
     printf("[ECS] archetype: %x, components: %zu\n", archetype->archetypeId, archetype->collumns.size());
   }
 
-  ecs::InitializerList args;
-  args.push_back(ecs::ComponentInit{"position", float3{1, 2, 3}});
-  args.push_back(ecs::ComponentInit{"velocity", float3{4, 5, 6}});
 
   {
-    ecs::EntityId eid = ecs::create_entity(mgr, template1, std::move(args));
+    ecs::InitializerList args;
+    args.push_back(ecs::ComponentInit{"position", float3{1, 2, 3}});
+    args.push_back(ecs::ComponentInit{"velocity", float3{4, 5, 6}});
+    ecs::EntityId eid = ecs::create_entity_sync(mgr, template1, std::move(args));
     ECS_UNUSED(eid);
     const float3 positionValue = float3{1, 2, 3};
     const float3 newPositionValue = float3{3, 2, 1};
@@ -187,8 +187,69 @@ int main()
     assert(*ecs::get_component<float3>(mgr, eid, "position") == newPositionValue);
   }
 
+  const float3 positionValue = float3{1, 2, 3};
+  const float3 velocityValue = float3{4, 5, 6};
 
-  ecs::create_entity(mgr,
+  {
+    ecs::InitializerList args;
+    args.push_back(ecs::ComponentInit{"position", float3{1, 2, 3}});
+    args.push_back(ecs::ComponentInit{"velocity", float3{4, 5, 6}});
+
+
+    ecs::EntityId eid = ecs::create_entity(mgr, template1, std::move(args));
+    ECS_UNUSED(eid);
+    assert(mgr.entityContainer.is_alive(eid));
+    assert(!mgr.entityContainer.can_access(eid));
+    assert(ecs::get_component<float3>(mgr, eid, "position") == nullptr);
+    assert(ecs::get_component<float3>(mgr, eid, "velocity") == nullptr);
+
+    ecs::perform_delayed_entities_creation(mgr);
+
+    assert(mgr.entityContainer.is_alive(eid));
+    assert(mgr.entityContainer.can_access(eid));
+    assert(*ecs::get_component<float3>(mgr, eid, "position") == positionValue);
+    assert(*ecs::get_component<float3>(mgr, eid, "velocity") == velocityValue);
+  }
+  {
+    std::vector<float3> positions = {float3{1, 2, 3}};
+    std::vector<float3> velocities = {float3{4, 5, 6}};
+    std::vector<ecs::EntityId> eids = ecs::create_entities(mgr, template1,
+    {{
+      {"position", std::move(positions)},
+      {"velocity", std::move(velocities)}
+    }});
+    ecs::EntityId eid = eids[0];
+    ECS_UNUSED(eid);
+
+    assert(mgr.entityContainer.is_alive(eid));
+    assert(!mgr.entityContainer.can_access(eid));
+    assert(ecs::get_component<float3>(mgr, eid, "position") == nullptr);
+    assert(ecs::get_component<float3>(mgr, eid, "velocity") == nullptr);
+
+    ecs::perform_delayed_entities_creation(mgr);
+
+    assert(mgr.entityContainer.is_alive(eid));
+    assert(mgr.entityContainer.can_access(eid));
+    assert(*ecs::get_component<float3>(mgr, eid, "position") == positionValue);
+    assert(*ecs::get_component<float3>(mgr, eid, "velocity") == velocityValue);
+  }
+  {
+    ecs::EntityId eid = ecs::create_entity(mgr, template1);
+    ECS_UNUSED(eid);
+    ecs::destroy_entity(mgr, eid);
+    assert(!mgr.entityContainer.is_alive(eid));
+    assert(!mgr.entityContainer.can_access(eid));
+    assert(ecs::get_component<float3>(mgr, eid, "position") == nullptr);
+    assert(ecs::get_component<float3>(mgr, eid, "velocity") == nullptr);
+    ecs::perform_delayed_entities_creation(mgr);
+    assert(!mgr.entityContainer.is_alive(eid));
+    assert(!mgr.entityContainer.can_access(eid));
+    assert(ecs::get_component<float3>(mgr, eid, "position") == nullptr);
+    assert(ecs::get_component<float3>(mgr, eid, "velocity") == nullptr);
+  }
+
+
+  ecs::create_entity_sync(mgr,
     template3,
     ecs::InitializerList{
       {
@@ -227,19 +288,19 @@ int main()
     }}
   );
 
-  ecs::create_entity(mgr, movableTemplate);
-  ecs::create_entity(mgr, brickTemplate);
-  ecs::create_entity(mgr, humanTemplate);
-  ecs::create_entity(mgr, bigBrickTemplate);
+  ecs::create_entity_sync(mgr, movableTemplate);
+  ecs::create_entity_sync(mgr, brickTemplate);
+  ecs::create_entity_sync(mgr, humanTemplate);
+  ecs::create_entity_sync(mgr, bigBrickTemplate);
 
 
   // if (false)
   {
-    Timer timer("create_entity"); // (0.066700 ms)
+    Timer timer("create_entity_sync"); // (0.066700 ms)
     for (int i = 0; i < 5; i++)
     {
       float f = i;
-      ecs::EntityId eid = ecs::create_entity(mgr,
+      ecs::EntityId eid = ecs::create_entity_sync(mgr,
         template2,
         {{
           {"position", float3{f, f, f}},
@@ -264,7 +325,7 @@ int main()
       positions.push_back({f, f, f});
       names.push_back("soa_node" + std::to_string(i));
     }
-    ecs::InitializerSoaList init;
+
     ecs::create_entities(mgr,
       template2,
       {{

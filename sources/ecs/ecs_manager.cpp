@@ -59,29 +59,23 @@ ComponentId get_or_add_component(EcsManager &mgr, TypeId typeId, const char *com
   return componentId;
 }
 
-static ecs::EntityId create_entity(EcsManager &mgr, ArchetypeId archetypeId, const InitializerList &template_init, InitializerList &&override_list)
+static void create_entity_sync(EcsManager &mgr, ecs::EntityId eid, ecs_details::Archetype &archetype, const InitializerList &template_init, InitializerList &&override_list)
 {
-  auto it = mgr.archetypeMap.find(archetypeId);
-  if (it == mgr.archetypeMap.end())
-  {
-    printf("Archetype not found\n");
-    return EntityId();
-  }
-  ecs_details::Archetype &archetype = *it->second;
   uint32_t entityIndex = archetype.entityCount;
-  ecs::EntityId eid = mgr.entityContainer.create_entity(archetypeId, entityIndex);
+  // entity was destroyed already
+  if (!mgr.entityContainer.mutate(eid, archetype.archetypeId, entityIndex))
+    return;
   override_list.push_back(ecs::ComponentInit(mgr.eidComponentId, ecs::EntityId(eid)));
   // can be not equal if template has unregistered components. Not terrible, but not good. In this case, we should skip them
   assert(archetype.type.size() <= template_init.size());
   ecs_details::add_entity_to_archetype(archetype, mgr, template_init, std::move(override_list));
 
   const OnAppear event;
-  perform_event_immediate(mgr, archetypeId, entityIndex, ecs::EventInfo<OnAppear>::eventId, &event);
-
-  return eid;
+  perform_event_immediate(mgr, archetype.archetypeId, entityIndex, ecs::EventInfo<OnAppear>::eventId, &event);
 }
 
-ecs::EntityId create_entity(EcsManager &mgr, TemplateId templateId, InitializerList &&init_list)
+
+ecs::EntityId create_entity_sync(EcsManager &mgr, TemplateId templateId, InitializerList &&init_list)
 {
   auto it = mgr.templates.find(templateId);
   if (it == mgr.templates.end())
@@ -90,36 +84,48 @@ ecs::EntityId create_entity(EcsManager &mgr, TemplateId templateId, InitializerL
     return EntityId();
   }
   const Template &templateRecord = it->second;
-  return create_entity(mgr, templateRecord.archetypeId, templateRecord.args, std::move(init_list));
+
+  auto it2 = mgr.archetypeMap.find(templateRecord.archetypeId);
+  if (it2 == mgr.archetypeMap.end())
+  {
+    printf("[ECS] Error: Archetype not found\n");
+    return EntityId();
+  }
+  ecs::EntityId eid = mgr.entityContainer.allocate_entity(ecs_details::EntityState::Alive);
+  create_entity_sync(mgr, eid, *it2->second, templateRecord.args, std::move(init_list));
+  return eid;
 }
 
-static std::vector<EntityId> create_entities(EcsManager &mgr, ArchetypeId archetypeId, const InitializerList &template_init, InitializerSoaList &&override_soa_list)
+ecs::EntityId create_entity(EcsManager &mgr, TemplateId templateId, InitializerList &&init_list)
 {
-  auto it = mgr.archetypeMap.find(archetypeId);
-  if (it == mgr.archetypeMap.end())
-  {
-    printf("Archetype not found\n");
-    return {};
-  }
-  ecs_details::Archetype &archetype = *it->second;
-  uint32_t requiredEntityCount = override_soa_list.size();
-  uint32_t entityIndex = archetype.entityCount;
-  std::vector<EntityId> eids = mgr.entityContainer.create_entities(archetypeId, entityIndex, requiredEntityCount);
+  ecs::EntityId eid = mgr.entityContainer.allocate_entity(ecs_details::EntityState::AsyncCreation);
+  mgr.delayedEntities.push_back({templateId, eid, std::move(init_list)});
+  return eid;
+}
 
-  // need to create copy to return list of eids
-  override_soa_list.push_back(ecs::ComponentSoaInit(mgr.eidComponentId, std::vector<EntityId>(eids)));
+static std::vector<EntityId> create_entities(EcsManager &mgr, std::vector<EntityId> &&eids, ecs_details::Archetype &archetype, const InitializerList &template_init, InitializerSoaList &&override_soa_list)
+{
+  uint32_t requiredEntityCount = override_soa_list.size();
+  const uint32_t startEntityIndex = archetype.entityCount;
+  uint32_t entityIndex = startEntityIndex;
+
+  eids.erase(eids.begin(), std::remove_if(eids.begin(), eids.end(), [&mgr, &archetype, &entityIndex](EntityId eid) {
+    return !mgr.entityContainer.mutate(eid, archetype.archetypeId, entityIndex++);
+  }));
+
+  override_soa_list.push_back(ecs::ComponentSoaInit(mgr.eidComponentId, std::move(eids)));
   assert(archetype.type.size() == template_init.size());
   ecs_details::add_entities_to_archetype(archetype, mgr, template_init, std::move(override_soa_list));
 
   const OnAppear event;
   for (uint32_t i = 0; i < requiredEntityCount; i++)
   {
-    perform_event_immediate(mgr, archetypeId, entityIndex + i, ecs::EventInfo<OnAppear>::eventId, &event);
+    perform_event_immediate(mgr, archetype.archetypeId, startEntityIndex + i, ecs::EventInfo<OnAppear>::eventId, &event);
   }
   return eids;
 }
 
-std::vector<EntityId> create_entities(EcsManager &mgr, TemplateId templateId, InitializerSoaList &&init_soa_list)
+std::vector<EntityId> create_entities_sync(EcsManager &mgr, TemplateId templateId, InitializerSoaList &&init_soa_list)
 {
   auto it = mgr.templates.find(templateId);
   if (it == mgr.templates.end())
@@ -128,10 +134,29 @@ std::vector<EntityId> create_entities(EcsManager &mgr, TemplateId templateId, In
     return {};
   }
   const Template &templateRecord = it->second;
-  return create_entities(mgr, templateRecord.archetypeId, templateRecord.args, std::move(init_soa_list));
+
+  auto it2 = mgr.archetypeMap.find(templateRecord.archetypeId);
+  if (it2 == mgr.archetypeMap.end())
+  {
+    printf("[ECS] Error: Archetype not found\n");
+    return {};
+  }
+  ecs_details::Archetype &archetype = *it2->second;
+  uint32_t requiredEntityCount = init_soa_list.size();
+  std::vector<EntityId> eids = mgr.entityContainer.allocate_entities(requiredEntityCount, ecs_details::EntityState::Alive);
+  create_entities(mgr, std::vector<EntityId>(eids), archetype, templateRecord.args, std::move(init_soa_list));
+  return eids;
 }
 
-bool destroy_entity(EcsManager &mgr, ecs::EntityId eid)
+std::vector<EntityId> create_entities(EcsManager &mgr, TemplateId templateId, InitializerSoaList &&init_soa_list)
+{
+  uint32_t requiredEntityCount = init_soa_list.size();
+  std::vector<EntityId> eids = mgr.entityContainer.allocate_entities(requiredEntityCount, ecs_details::EntityState::AsyncCreation);
+  mgr.delayedEntitiesSoa.push_back({templateId, std::vector<EntityId>(eids), std::move(init_soa_list)});
+  return eids;
+}
+
+bool destroy_entity_sync(EcsManager &mgr, ecs::EntityId eid)
 {
   ecs::ArchetypeId archetypeId;
   uint32_t componentIndex;
@@ -152,6 +177,69 @@ bool destroy_entity(EcsManager &mgr, ecs::EntityId eid)
     return true;
   }
   return false;
+}
+
+void destroy_entity(EcsManager &mgr, ecs::EntityId eid)
+{
+  if (mgr.entityContainer.mark_as_destroyed(eid))
+    mgr.delayedEntitiesDestroy.push_back(eid);
+}
+
+void perform_delayed_entities_creation(EcsManager &mgr)
+{
+  // need take into account that entity can be added/removed during OnAppear/OnDisappear events
+
+  uint32_t delayedEntityDestroyCount = mgr.delayedEntitiesDestroy.size();
+  uint32_t delayedEntityCount = mgr.delayedEntities.size();
+  uint32_t delayedEntitySoaCount = mgr.delayedEntitiesSoa.size();
+
+  for (uint32_t i = 0, n = delayedEntityDestroyCount; i < n; i++)
+  {
+    destroy_entity_sync(mgr, mgr.delayedEntitiesDestroy[i]);
+  }
+
+  for (uint32_t i = 0, n = delayedEntityCount; i < n; i++)
+  {
+    EcsManager::DelayedEntity &entity = mgr.delayedEntities[i];
+    auto it = mgr.templates.find(entity.templateId);
+    if (it == mgr.templates.end())
+    {
+      printf("[ECS] Error: Template not found\n");
+      continue;
+    }
+    const Template &templateRecord = it->second;
+
+    auto it2 = mgr.archetypeMap.find(templateRecord.archetypeId);
+    if (it2 == mgr.archetypeMap.end())
+    {
+      printf("[ECS] Error: Archetype not found\n");
+      continue;
+    }
+    create_entity_sync(mgr, entity.eid, *it2->second, templateRecord.args, std::move(entity.initList));
+  }
+
+  for (uint32_t i = 0, n = delayedEntitySoaCount; i < n; i++)
+  {
+    EcsManager::DelayedEntitySoa &entity = mgr.delayedEntitiesSoa[i];
+    auto it = mgr.templates.find(entity.templateId);
+    if (it == mgr.templates.end())
+    {
+      printf("[ECS] Error: Template not found\n");
+      continue;
+    }
+    const Template &templateRecord = it->second;
+
+    auto it2 = mgr.archetypeMap.find(templateRecord.archetypeId);
+    if (it2 == mgr.archetypeMap.end())
+    {
+      printf("[ECS] Error: Archetype not found\n");
+      continue;
+    }
+    create_entities(mgr, std::move(entity.eids), *it2->second, templateRecord.args, std::move(entity.initSoaList));
+  }
+  mgr.delayedEntities.erase(mgr.delayedEntities.begin(), mgr.delayedEntities.begin() + delayedEntityCount);
+  mgr.delayedEntitiesSoa.erase(mgr.delayedEntitiesSoa.begin(), mgr.delayedEntitiesSoa.begin() + delayedEntitySoaCount);
+  mgr.delayedEntitiesDestroy.erase(mgr.delayedEntitiesDestroy.begin(), mgr.delayedEntitiesDestroy.begin() + delayedEntityDestroyCount);
 }
 
 void perform_event_immediate(EcsManager &mgr, EventId event_id, const void *event_ptr)
@@ -284,7 +372,7 @@ void destroy_entities(EcsManager &mgr)
   const OnDisappear event;
   for (const ecs_details::EntityRecord &entity : mgr.entityContainer.entityRecords)
   {
-    if (entity.isAlive)
+    if (entity.entityState == ecs_details::EntityState::Alive)
     {
       perform_event_immediate(mgr, entity.archetypeId, entity.componentIndex, ecs::EventInfo<OnDisappear>::eventId, &event);
     }

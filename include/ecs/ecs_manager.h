@@ -26,6 +26,20 @@ struct EcsManager
     bool broadcastEvent;
   };
 
+  struct DelayedEntity
+  {
+    TemplateId templateId;
+    ecs::EntityId eid;
+    InitializerList initList;
+  };
+
+  struct DelayedEntitySoa
+  {
+    TemplateId templateId;
+    std::vector<ecs::EntityId> eids;
+    InitializerSoaList initSoaList;
+  };
+
   TypeDeclarationMap typeMap;
   ComponentDeclarationMap componentMap;
   ArchetypeMap archetypeMap;
@@ -34,6 +48,9 @@ struct EcsManager
   ska::flat_hash_map<NameHash, EventHandler> events;
   ska::flat_hash_map<EventId, std::vector<NameHash>> eventIdToHandlers;
   std::vector<DelayedEvent> delayedEvents;
+  std::vector<DelayedEntity> delayedEntities;
+  std::vector<DelayedEntitySoa> delayedEntitiesSoa;
+  std::vector<ecs::EntityId> delayedEntitiesDestroy;
   ecs_details::EntityContainer entityContainer;
   TemplatesMap templates;
 

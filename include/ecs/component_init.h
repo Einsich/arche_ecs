@@ -1,12 +1,11 @@
 #pragma once
 #include "ecs/config.h"
 #include "ecs/any.h"
-
+#include "ecs/type_declaration_helper.h"
 namespace ecs
 {
 
   struct EcsManager;
-  ComponentId get_or_add_component(EcsManager &manager, TypeId typeId, const char *component_name);
 
 
   struct ComponentDataSoa
@@ -89,7 +88,7 @@ namespace ecs
 
     template<typename ValueType, typename T = std::remove_cvref<ValueType>::type>
     ComponentInit(EcsManager &manager, const char *component_name, ValueType &&_data) :
-        ComponentInit(get_or_add_component(manager, ecs::TypeInfo<T>::typeId, component_name), std::move(_data)) {}
+        ComponentInit(get_or_add_component<T>(manager, component_name), std::move(_data)) {}
 
     template<typename ValueType>
     ComponentInit(ComponentId component_id, const ValueType&_data) :
@@ -101,32 +100,8 @@ namespace ecs
 
     template<typename ValueType>
     ComponentInit(EcsManager &manager, const char *component_name, const ValueType &_data) :
-        ComponentInit(get_or_add_component(manager, ecs::TypeInfo<T>::typeId, component_name), _data) {}
+        ComponentInit(get_or_add_component<T>(manager, component_name), _data) {}
 
-
-    template<typename ValueType, typename T = std::remove_cvref<ValueType>::type>
-    ComponentInit(ComponentId component_id, ecs::LazyInit, ValueType &&_data) :
-        ecs::Any(std::move(_data), ecs::LazyInitTypeBind<T>::typeId), componentId(component_id) {}
-
-    template<typename ValueType, typename T = std::remove_cvref<ValueType>::type>
-    ComponentInit(const char *component_name, ecs::LazyInit, ValueType &&_data) :
-        ComponentInit(get_component_id(ecs::LazyInitTypeBind<T>::typeId, component_name), std::move(_data)) {}
-
-    template<typename ValueType, typename T = std::remove_cvref<ValueType>::type>
-    ComponentInit(EcsManager &manager, const char *component_name, ecs::LazyInit, ValueType &&_data) :
-        ComponentInit(get_or_add_component(manager, ecs::LazyInitTypeBind<T>::typeId, component_name), std::move(_data)) {}
-
-    template<typename ValueType>
-    ComponentInit(ComponentId component_id, ecs::LazyInit, const ValueType&_data) :
-        ecs::Any(_data, ecs::LazyInitTypeBind<T>::typeId), componentId(component_id) {}
-
-    template<typename ValueType>
-    ComponentInit(const char *component_name, ecs::LazyInit, const ValueType &_data) :
-        ComponentInit(get_component_id(ecs::LazyInitTypeBind<T>::typeId, component_name), _data) {}
-
-    template<typename ValueType>
-    ComponentInit(EcsManager &manager, const char *component_name, ecs::LazyInit, const ValueType &_data) :
-        ComponentInit(get_or_add_component(manager, ecs::LazyInitTypeBind<T>::typeId, component_name), _data) {}
 
     ComponentInit(ComponentId component_id, ecs::Any &&_data) :
         ecs::Any(std::move(_data)), componentId(component_id) {}
@@ -154,7 +129,7 @@ namespace ecs
 
     template<typename T>
     ComponentSoaInit(EcsManager &manager, const char *component_name, std::vector<T> &&_data) :
-        ComponentDataSoa(std::move(_data), ecs::TypeInfo<T>::typeId), componentId(get_or_add_component(manager, ecs::TypeInfo<T>::typeId, component_name)) {}
+        ComponentDataSoa(std::move(_data), ecs::TypeInfo<T>::typeId), componentId(get_or_add_component<T>(manager, component_name)) {}
 
     ComponentSoaInit(ComponentSoaInit &&other) : ComponentDataSoa(std::move(other)), componentId(other.componentId)
     {

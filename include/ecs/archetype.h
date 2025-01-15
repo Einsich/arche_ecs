@@ -9,7 +9,7 @@
 namespace ecs_details
 {
 
-using ArchetypeComponentType = ska::flat_hash_map<ecs::ComponentId, ecs::TypeId  /*ComponentId already has TypeId*/>;
+using ArchetypeComponentType = ska::flat_hash_set<ecs::ComponentId>;
 
 struct Archetype
 {

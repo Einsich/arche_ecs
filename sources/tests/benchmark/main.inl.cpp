@@ -16,7 +16,7 @@ static void query_perf_test1(ecs::EcsManager &mgr, Callable &&query_function)
 {
   constexpr ecs::NameHash queryHash = ecs::hash("sources/tests/benchmark/main.inl:416[query_perf_test1]");
   const int N = 1;
-  ecs_details::query_iteration<N, float3*>(mgr, queryHash, std::move(query_function));
+  ecs_details::query_iteration<N, ecs_details::Ptr<float3>>(mgr, queryHash, std::move(query_function));
 }
 
 template<typename Callable>
@@ -24,7 +24,7 @@ static void query_perf_test2(ecs::EcsManager &mgr, Callable &&query_function)
 {
   constexpr ecs::NameHash queryHash = ecs::hash("sources/tests/benchmark/main.inl:424[query_perf_test2]");
   const int N = 2;
-  ecs_details::query_iteration<N, float3*, const float3*>(mgr, queryHash, std::move(query_function));
+  ecs_details::query_iteration<N, ecs_details::Ptr<float3>, ecs_details::Ptr<const float3>>(mgr, queryHash, std::move(query_function));
 }
 
 template<typename Callable>
@@ -32,25 +32,25 @@ static void query_perf_test3(ecs::EcsManager &mgr, Callable &&query_function)
 {
   constexpr ecs::NameHash queryHash = ecs::hash("sources/tests/benchmark/main.inl:432[query_perf_test3]");
   const int N = 3;
-  ecs_details::query_iteration<N, float3*, float3*, const float3*>(mgr, queryHash, std::move(query_function));
+  ecs_details::query_iteration<N, ecs_details::Ptr<float3>, ecs_details::Ptr<float3>, ecs_details::Ptr<const float3>>(mgr, queryHash, std::move(query_function));
 }
 
 static void system_perf_test1_implementation(ecs_details::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)
 {
   const int N = 1;
-  ecs_details::query_archetype_iteration<N, float3*>(archetype, to_archetype_component, system_perf_test1, std::make_index_sequence<N>());
+  ecs_details::query_archetype_iteration<N, ecs_details::Ptr<float3>>(archetype, to_archetype_component, system_perf_test1, std::make_index_sequence<N>());
 }
 
 static void system_perf_test2_implementation(ecs_details::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)
 {
   const int N = 2;
-  ecs_details::query_archetype_iteration<N, float3*, const float3*>(archetype, to_archetype_component, system_perf_test2, std::make_index_sequence<N>());
+  ecs_details::query_archetype_iteration<N, ecs_details::Ptr<float3>, ecs_details::Ptr<const float3>>(archetype, to_archetype_component, system_perf_test2, std::make_index_sequence<N>());
 }
 
 static void system_perf_test3_implementation(ecs_details::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)
 {
   const int N = 3;
-  ecs_details::query_archetype_iteration<N, float3*, float3*, const float3*>(archetype, to_archetype_component, system_perf_test3, std::make_index_sequence<N>());
+  ecs_details::query_archetype_iteration<N, ecs_details::Ptr<float3>, ecs_details::Ptr<float3>, ecs_details::Ptr<const float3>>(archetype, to_archetype_component, system_perf_test3, std::make_index_sequence<N>());
 }
 
 static void ecs_registration(ecs::EcsManager &mgr)
@@ -63,7 +63,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
-      {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "position"), ecs::Query::ComponentAccess::READ_WRITE}
+      {ecs::get_component_id(ecs::TypeInfo<float3>::typeId, "position"), ecs::Query::ComponentAccess::READ_WRITE}
     };
     ecs::register_query(mgr, std::move(query));
   }
@@ -74,8 +74,8 @@ static void ecs_registration(ecs::EcsManager &mgr)
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
-      {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "position"), ecs::Query::ComponentAccess::READ_WRITE},
-      {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "velocity"), ecs::Query::ComponentAccess::READ_ONLY}
+      {ecs::get_component_id(ecs::TypeInfo<float3>::typeId, "position"), ecs::Query::ComponentAccess::READ_WRITE},
+      {ecs::get_component_id(ecs::TypeInfo<float3>::typeId, "velocity"), ecs::Query::ComponentAccess::READ_ONLY}
     };
     ecs::register_query(mgr, std::move(query));
   }
@@ -86,9 +86,9 @@ static void ecs_registration(ecs::EcsManager &mgr)
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
-      {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "position"), ecs::Query::ComponentAccess::READ_WRITE},
-      {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "velocity"), ecs::Query::ComponentAccess::READ_WRITE},
-      {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "acceleration"), ecs::Query::ComponentAccess::READ_ONLY}
+      {ecs::get_component_id(ecs::TypeInfo<float3>::typeId, "position"), ecs::Query::ComponentAccess::READ_WRITE},
+      {ecs::get_component_id(ecs::TypeInfo<float3>::typeId, "velocity"), ecs::Query::ComponentAccess::READ_WRITE},
+      {ecs::get_component_id(ecs::TypeInfo<float3>::typeId, "acceleration"), ecs::Query::ComponentAccess::READ_ONLY}
     };
     ecs::register_query(mgr, std::move(query));
   }
@@ -99,7 +99,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
-      {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "position"), ecs::Query::ComponentAccess::READ_WRITE}
+      {ecs::get_component_id(ecs::TypeInfo<float3>::typeId, "position"), ecs::Query::ComponentAccess::READ_WRITE}
     };
     query.update_archetype = system_perf_test1_implementation;
     ecs::register_system(mgr, std::move(query));
@@ -111,8 +111,8 @@ static void ecs_registration(ecs::EcsManager &mgr)
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
-      {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "position"), ecs::Query::ComponentAccess::READ_WRITE},
-      {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "velocity"), ecs::Query::ComponentAccess::READ_ONLY}
+      {ecs::get_component_id(ecs::TypeInfo<float3>::typeId, "position"), ecs::Query::ComponentAccess::READ_WRITE},
+      {ecs::get_component_id(ecs::TypeInfo<float3>::typeId, "velocity"), ecs::Query::ComponentAccess::READ_ONLY}
     };
     query.update_archetype = system_perf_test2_implementation;
     ecs::register_system(mgr, std::move(query));
@@ -124,9 +124,9 @@ static void ecs_registration(ecs::EcsManager &mgr)
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
-      {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "position"), ecs::Query::ComponentAccess::READ_WRITE},
-      {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "velocity"), ecs::Query::ComponentAccess::READ_WRITE},
-      {ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "acceleration"), ecs::Query::ComponentAccess::READ_ONLY}
+      {ecs::get_component_id(ecs::TypeInfo<float3>::typeId, "position"), ecs::Query::ComponentAccess::READ_WRITE},
+      {ecs::get_component_id(ecs::TypeInfo<float3>::typeId, "velocity"), ecs::Query::ComponentAccess::READ_WRITE},
+      {ecs::get_component_id(ecs::TypeInfo<float3>::typeId, "acceleration"), ecs::Query::ComponentAccess::READ_ONLY}
     };
     query.update_archetype = system_perf_test3_implementation;
     ecs::register_system(mgr, std::move(query));

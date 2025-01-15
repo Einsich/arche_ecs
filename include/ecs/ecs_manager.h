@@ -9,6 +9,7 @@
 #include "ecs/template.h"
 #include "ecs/query.h"
 #include "ecs/event.h"
+#include "ecs/singleton_component.h"
 
 namespace ecs
 {
@@ -18,6 +19,7 @@ struct EcsManager
   using ComponentDeclarationMap = ska::flat_hash_map<ComponentId, std::unique_ptr<ComponentDeclaration>>;
   using ArchetypeMap = ska::flat_hash_map<ArchetypeId, std::unique_ptr<ecs_details::Archetype>>;
   using TemplatesMap = ska::flat_hash_map<TemplateId, Template>;
+  using SingletonComponentsMap = ska::flat_hash_map<TypeId, SingletonComponent>;
 
   struct DelayedEvent
   {
@@ -53,6 +55,7 @@ struct EcsManager
   std::vector<ecs::EntityId> delayedEntitiesDestroy;
   ecs_details::EntityContainer entityContainer;
   TemplatesMap templates;
+  SingletonComponentsMap singletons;
 
 
   ecs::TypeId EntityIdTypeId;
@@ -62,5 +65,10 @@ struct EcsManager
 
 };
 
+template <typename T>
+ComponentId get_or_add_component(EcsManager &mgr, const char *component_name)
+{
+  return get_or_add_component(mgr, TypeInfo<T>::typeId, component_name);
+}
 
 } // namespace ecs

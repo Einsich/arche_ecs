@@ -100,6 +100,20 @@ multi_event(const ecs::Event &event, ecs::EntityId eid)
     printf("multi_event HeavyEvent [%d/%d]\n", eid.entityIndex, eid.generation);
 }
 
+struct SingletonComponent
+{
+  int value;
+};
+
+ECS_SINGLETON_TYPE_DECLARATION(SingletonComponent)
+ECS_TYPE_REGISTRATION(SingletonComponent)
+
+ECS_SYSTEM(require=std::string name; require_not=int health)
+update_with_singleton(ecs::EntityId eid, SingletonComponent &singleton)
+{
+  printf("update_with_singleton [%d/%d] SingletonComponent.value = %d\n", eid.entityIndex, eid.generation, singleton.value++);
+}
+
 int main()
 {
   const bool EntityContainerTest = true;
@@ -126,19 +140,21 @@ int main()
 
   ecs::sort_systems(mgr);
 
+  ecs::init_singletons(mgr);
+
   for (const auto &[id, type] : mgr.typeMap)
   {
     printf("[ECS] type: %s, typeId: %x\n", type.typeName.c_str(), type.typeId);
   }
 
-  ecs::ComponentId positionId = ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "position");
-  ecs::ComponentId velocityId = ecs::get_or_add_component(mgr, ecs::TypeInfo<float3>::typeId, "velocity");
-  ecs::ComponentId healthId = ecs::get_or_add_component(mgr, ecs::TypeInfo<int>::typeId, "health");
-  ecs::ComponentId nameId = ecs::get_or_add_component(mgr, ecs::TypeInfo<std::string>::typeId, "name");
+  ecs::ComponentId positionId = ecs::get_or_add_component<float3>(mgr, "position");
+  ecs::ComponentId velocityId = ecs::get_or_add_component<float3>(mgr, "velocity");
+  ecs::ComponentId healthId = ecs::get_or_add_component<int>(mgr, "health");
+  ecs::ComponentId nameId = ecs::get_or_add_component<std::string>(mgr, "name");
 
   for (const auto &[id, component] : mgr.componentMap)
   {
-    printf("[ECS] component: %s, componentId: %x, typeId: %x\n", component->name.c_str(), component->componentId, component->typeId);
+    printf("[ECS] component: %s, componentId: %llx, typeId: %x\n", component->name.c_str(), component->componentId, component->typeId);
   }
 
   ecs::TemplateId template1 = template_registration(mgr, "point",

@@ -13,17 +13,22 @@ struct ComponentDeclaration
   ComponentId componentId; // hash(hash(type), hash(name))
 };
 
+inline constexpr ComponentId get_component_id(TypeId typeId, NameHash component_name)
+{
+  return (uint64_t(component_name) << uint64_t(32)) | typeId;
+}
 inline constexpr ComponentId get_component_id(TypeId typeId, const char *component_name)
 {
-  uint32_t typeWithSpace = hash(" ", typeId);
-  return hash(component_name, typeWithSpace);
+  return get_component_id(typeId, hash(component_name));
 }
-
 inline constexpr ComponentId get_component_id(const char *type_name, const char *component_name)
 {
-  TypeId typeId = hash(type_name);
-  uint32_t typeWithSpace = hash(" ", typeId);
-  return hash(component_name, typeWithSpace);
+  return get_component_id(hash(type_name), hash(component_name));
+}
+
+inline constexpr TypeId get_type_id(ComponentId component_id)
+{
+  return uint32_t(component_id);
 }
 
 

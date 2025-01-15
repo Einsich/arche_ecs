@@ -17,6 +17,7 @@ struct TypeDeclaration
   uint32_t sizeOfElement = 0;
   uint32_t alignmentOfElement = 1;
   bool isTriviallyRelocatable = false;
+  bool isSingleton = false;
 
   DefaultConstructor construct_default = nullptr;
   Destructor destruct = nullptr;

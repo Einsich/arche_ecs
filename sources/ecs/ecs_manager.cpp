@@ -412,4 +412,22 @@ void *get_rw_component(EcsManager &mgr, EntityId eid, ComponentId componentId)
   return const_cast<void *>(get_component(mgr, eid, componentId));
 }
 
+void init_singletons(EcsManager &mgr)
+{
+  for (const auto &[typeId, typeDecl] : mgr.typeMap)
+  {
+    if (typeDecl.isSingleton)
+    {
+      if (typeDecl.construct_default)
+      {
+        mgr.singletons[typeId] = ecs::SingletonComponent(typeDecl);
+      }
+      else
+      {
+        printf("Singleton component %s has no default constructor\n", typeDecl.typeName.c_str());
+      }
+    }
+  }
+}
+
 } // namespace ecs

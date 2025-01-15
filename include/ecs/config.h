@@ -8,7 +8,7 @@
 
 namespace ecs
 {
-  using ComponentId = uint32_t;
+  using ComponentId = uint64_t;
   using TypeId = uint32_t;
   using NameHash = uint32_t;
   using ArchetypeId = uint32_t;

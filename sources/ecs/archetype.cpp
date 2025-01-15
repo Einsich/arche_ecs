@@ -15,9 +15,9 @@ static const ecs::TypeDeclaration *find_type_declaration(const ecs::TypeDeclarat
 static ecs::ArchetypeId get_archetype_id(const ArchetypeComponentType &type)
 {
   uint32_t id = 0;
-  for (const auto &[componentId, typeId]  : type)
+  for (const ecs::ComponentId componentId : type)
   {
-    id = ecs::fnv_hash(id, componentId);
+    id = ecs::fnv_hash(componentId, id);
   }
   return id;
 }
@@ -28,8 +28,9 @@ Archetype::Archetype(const ecs::TypeDeclarationMap &type_map, ecs::ArchetypeId a
   assert(!type.empty());
   collumns.reserve(type.size());
   componentToCollumnIndex.reserve(type.size());
-  for (auto [componentId, typeId] : type)
+  for (const ecs::ComponentId componentId : type)
   {
+    const ecs::TypeId typeId = ecs::get_type_id(componentId);
     const ecs::TypeDeclaration *typeDeclaration = find_type_declaration(type_map, typeId);
     if (typeDeclaration == nullptr)
     {
@@ -198,15 +199,15 @@ static void register_archetype(ecs::EcsManager &mgr, ecs_details::Archetype &&ar
   std::unique_ptr<ecs_details::Archetype> archetypePtr = std::make_unique<ecs_details::Archetype>(std::move(archetype));
   for (auto &[id, query] : mgr.queries)
   {
-    try_registrate(query, archetypePtr.get());
+    try_registrate(mgr, query, archetypePtr.get());
   }
   for (auto &query : mgr.systems)
   {
-    try_registrate(query, archetypePtr.get());
+    try_registrate(mgr, query, archetypePtr.get());
   }
   for (auto &[id, query] : mgr.events)
   {
-    try_registrate(query, archetypePtr.get());
+    try_registrate(mgr, query, archetypePtr.get());
   }
   mgr.archetypeMap[archetype.archetypeId] = std::move(archetypePtr);
 }
@@ -224,7 +225,7 @@ ecs::ArchetypeId get_or_create_archetype(ecs::EcsManager &mgr, ecs::InitializerL
     {
       if (cmpIt->second->typeId == arg.second.typeId)
       {
-        type.insert({arg.first, arg.second.typeId});
+        type.insert(arg.first);
         ++it;
         continue;
       }
@@ -240,7 +241,7 @@ ecs::ArchetypeId get_or_create_archetype(ecs::EcsManager &mgr, ecs::InitializerL
     else
     {
       const char *receivedType = mgr.typeMap.find(arg.second.typeId)->second.typeName.c_str();
-      printf("[ECS] Error: Component %x of type %s not found, during instantiation template \"%s\"\n", arg.first, receivedType, template_name);
+      printf("[ECS] Error: Component %llx of type %s not found, during instantiation template \"%s\"\n", arg.first, receivedType, template_name);
     }
 
     it = components.args.erase(it);

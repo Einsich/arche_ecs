@@ -40,26 +40,29 @@ TypeDeclaration create_type_declaration()
   type_declaration.typeName = ecs::TypeInfo<T>::typeName;
   type_declaration.typeId = ecs::TypeInfo<T>::typeId;
   type_declaration.isTriviallyRelocatable = ecs::TypeInfo<T>::isTriviallyRelocatable;
+  type_declaration.isSingleton = ecs::TypeInfo<T>::isSingleton;
   type_declaration.sizeOfElement = sizeof(T);
   type_declaration.alignmentOfElement = alignof(T);
   type_declaration.construct_default = ecs_details::construct_default<T>;
   type_declaration.destruct = ecs_details::destruct<T>;
-  // if constexpr (std::is_copy_constructible_v<T>)
-  type_declaration.copy_construct = ecs_details::copy_construct<T>;
-  type_declaration.move_construct = ecs_details::move_construct<T>;
+  if constexpr (std::is_copy_constructible_v<T>)
+    type_declaration.copy_construct = ecs_details::copy_construct<T>;
+  if constexpr (std::is_move_constructible_v<T>)
+    type_declaration.move_construct = ecs_details::move_construct<T>;
   return type_declaration;
 }
 
 template<typename T>
 struct TypeInfo;
 
-#define ECS_TYPE_DECLARATION_VERBOSE(CPP_TYPE, STRING_ALIAS, IS_TRIVIALLY_RELOCATABLE) \
+#define ECS_TYPE_DECLARATION_VERBOSE(CPP_TYPE, STRING_ALIAS, IS_TRIVIALLY_RELOCATABLE, IS_SINGLETON) \
   template<> \
   struct ecs::TypeInfo<CPP_TYPE> \
   { \
     static constexpr ecs::TypeId typeId = ecs::hash(STRING_ALIAS); \
     static constexpr const char *typeName = STRING_ALIAS; \
     static constexpr bool isTriviallyRelocatable = IS_TRIVIALLY_RELOCATABLE; \
+    static constexpr bool isSingleton = IS_SINGLETON; \
   };
 
 template<typename T>
@@ -68,13 +71,16 @@ struct is_trivially_relocatable
   static constexpr bool value = sizeof(T) < 1024;
 };
 
-#define ECS_TYPE_DECLARATION(CPP_TYPE) ECS_TYPE_DECLARATION_VERBOSE(CPP_TYPE, #CPP_TYPE, is_trivially_relocatable<CPP_TYPE>::value)
-#define ECS_RELOCATABLE_TYPE_DECLARATION(CPP_TYPE) ECS_TYPE_DECLARATION_VERBOSE(CPP_TYPE, #CPP_TYPE, true)
-#define ECS_NON_RELOCATABLE_TYPE_DECLARATION(CPP_TYPE) ECS_TYPE_DECLARATION_VERBOSE(CPP_TYPE, #CPP_TYPE, false)
+#define ECS_TYPE_DECLARATION(CPP_TYPE) ECS_TYPE_DECLARATION_VERBOSE(CPP_TYPE, #CPP_TYPE, is_trivially_relocatable<CPP_TYPE>::value, false)
+#define ECS_RELOCATABLE_TYPE_DECLARATION(CPP_TYPE) ECS_TYPE_DECLARATION_VERBOSE(CPP_TYPE, #CPP_TYPE, true, false)
+#define ECS_NON_RELOCATABLE_TYPE_DECLARATION(CPP_TYPE) ECS_TYPE_DECLARATION_VERBOSE(CPP_TYPE, #CPP_TYPE, false, false)
 
-#define ECS_TYPE_DECLARATION_ALIAS(CPP_TYPE, STRING_ALIAS) ECS_TYPE_DECLARATION_VERBOSE(CPP_TYPE, STRING_ALIAS, is_trivially_relocatable<CPP_TYPE>::value)
-#define ECS_RELOCATABLE_TYPE_DECLARATION_ALIAS(CPP_TYPE, STRING_ALIAS) ECS_TYPE_DECLARATION_VERBOSE(CPP_TYPE, STRING_ALIAS, true)
-#define ECS_NON_RELOCATABLE_TYPE_DECLARATION_ALIAS(CPP_TYPE, STRING_ALIAS) ECS_TYPE_DECLARATION_VERBOSE(CPP_TYPE, STRING_ALIAS, false)
+#define ECS_TYPE_DECLARATION_ALIAS(CPP_TYPE, STRING_ALIAS) ECS_TYPE_DECLARATION_VERBOSE(CPP_TYPE, STRING_ALIAS, is_trivially_relocatable<CPP_TYPE>::value, false)
+#define ECS_RELOCATABLE_TYPE_DECLARATION_ALIAS(CPP_TYPE, STRING_ALIAS) ECS_TYPE_DECLARATION_VERBOSE(CPP_TYPE, STRING_ALIAS, true, false)
+#define ECS_NON_RELOCATABLE_TYPE_DECLARATION_ALIAS(CPP_TYPE, STRING_ALIAS) ECS_TYPE_DECLARATION_VERBOSE(CPP_TYPE, STRING_ALIAS, false, false)
+
+#define ECS_SINGLETON_TYPE_DECLARATION(CPP_TYPE) ECS_TYPE_DECLARATION_VERBOSE(CPP_TYPE, #CPP_TYPE, false, true)
+#define ECS_SINGLETON_TYPE_DECLARATION_ALIAS(CPP_TYPE, STRING_ALIAS) ECS_TYPE_DECLARATION_VERBOSE(CPP_TYPE, STRING_ALIAS, false, true)
 
 } // namespace ecs
 

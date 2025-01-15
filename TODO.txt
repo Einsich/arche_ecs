@@ -4,6 +4,6 @@
 3) add/remove templates/components
 4) track events
 5) uncopyable component creation (for templates)
-6) singleton types
+6) singleton types (done)
 7) get/set component by eid (done, but depends on 4th punkt)
 8) async entity creation (done)

@@ -72,7 +72,7 @@ void register_query(EcsManager &mgr, Query &&query);
 void register_system(EcsManager &mgr, System &&system);
 void register_event(EcsManager &mgr, EventHandler &&event);
 
-bool try_registrate(ecs::Query &query, const ecs_details::Archetype *archetype);
+bool try_registrate(ecs::EcsManager &mgr, ecs::Query &query, const ecs_details::Archetype *archetype);
 
 //helper function
 void perform_system(const System &system);

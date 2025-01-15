@@ -13,6 +13,7 @@ void register_all_codegen_files(ecs::EcsManager &mgr);
 void register_all_type_declarations(ecs::EcsManager &mgr);
 
 void sort_systems(EcsManager &mgr);
+void init_singletons(EcsManager &mgr);
 
 ecs::EntityId create_entity_sync(EcsManager &mgr, TemplateId templateId, InitializerList &&init_list = {});
 ecs::EntityId create_entity(EcsManager &mgr, TemplateId templateId, InitializerList &&init_list = {});

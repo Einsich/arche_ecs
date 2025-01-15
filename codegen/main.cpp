@@ -377,9 +377,9 @@ void template_query_types(std::ofstream &outFile, const ParserFunctionArgument *
     auto &arg = args[i];
     if (!arg.optional)
     {
-      snprintf(buffer, bufferSize, "%s%s%s%s",
+      snprintf(buffer, bufferSize, "ecs_details::Ptr<%s%s>%s",
               arg.is_const ? "const " : "",
-              arg.type.c_str(), "*",
+              arg.type.c_str(),
               i + 1 == args_count ? "" : ", ");
     }
     else
@@ -562,7 +562,7 @@ void fill_arguments(std::ofstream &outFile, const std::vector<ParserFunctionArgu
     auto &arg = args[i];
 
     write(outFile,
-          "      {ecs::get_or_add_component(mgr, ecs::TypeInfo<%s>::typeId, \"%s\"), %s}%s\n",
+          "      {ecs::get_component_id(ecs::TypeInfo<%s>::typeId, \"%s\"), %s}%s\n",
           arg.type.c_str(),
           arg.name.c_str(),
           arg.get_type(),
@@ -579,7 +579,7 @@ void fill_required_arguments(std::ofstream &outFile, const std::vector<ParserFun
     auto &arg = args[i];
 
     write(outFile,
-          "      ecs::get_or_add_component(mgr, ecs::TypeInfo<%s>::typeId, \"%s\")%s\n",
+          "      ecs::get_component_id(ecs::TypeInfo<%s>::typeId, \"%s\")%s\n",
           arg.type.c_str(),
           arg.name.c_str(),
           i + 1 == (uint)args.size() ? "" : ",");

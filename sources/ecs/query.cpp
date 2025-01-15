@@ -147,7 +147,7 @@ void sort_systems(EcsManager &mgr)
   }
 }
 
-bool try_registrate(ecs::Query &query, const ecs_details::Archetype *archetype)
+bool try_registrate(ecs::EcsManager &mgr, ecs::Query &query, const ecs_details::Archetype *archetype)
 {
   for (ComponentId componentId : query.requireComponents)
   {
@@ -170,11 +170,26 @@ bool try_registrate(ecs::Query &query, const ecs_details::Archetype *archetype)
   for (const Query::ComponentAccessInfo &componentAccessInfo : query.querySignature)
   {
     int componentIndex = archetype->getComponentCollumnIndex(componentAccessInfo.componentId);
-    if (componentIndex == -1 && !(componentAccessInfo.access == Query::ComponentAccess::READ_ONLY_OPTIONAL || componentAccessInfo.access == Query::ComponentAccess::READ_WRITE_OPTIONAL))
+    if (componentIndex != -1)
     {
-      return false;
+      toComponentIndex.push_back((std::vector<char *> *)&(archetype->collumns[componentIndex].chunks));
     }
-    toComponentIndex.push_back(componentIndex >= 0 ? (std::vector<char *> *)&(archetype->collumns[componentIndex].chunks) : nullptr);
+    else
+    {
+      auto it = mgr.singletons.find(get_type_id(componentAccessInfo.componentId));
+      if (it != mgr.singletons.end())
+      {
+        toComponentIndex.push_back((std::vector<char *> *)it->second.data);
+      }
+      else if (!(componentAccessInfo.access == Query::ComponentAccess::READ_ONLY_OPTIONAL || componentAccessInfo.access == Query::ComponentAccess::READ_WRITE_OPTIONAL))
+      {
+        return false;
+      }
+      else
+      {
+        toComponentIndex.push_back(nullptr);
+      }
+    }
   }
 
   query.archetypesCache.insert({archetype->archetypeId, {(ecs_details::Archetype *)archetype, std::move(toComponentIndex)}});
@@ -186,7 +201,7 @@ void register_query(EcsManager &mgr, Query &&query)
 {
   for (const auto &[id, archetype] : mgr.archetypeMap)
   {
-    try_registrate(query, archetype.get());
+    try_registrate(mgr, query, archetype.get());
   }
   printf("[ECS] Register query %s\n", query.uniqueName.c_str());
   mgr.queries[query.nameHash] = std::move(query);
@@ -196,7 +211,7 @@ void register_system(EcsManager &mgr, System &&system)
 {
   for (const auto &[id, archetype] : mgr.archetypeMap)
   {
-    try_registrate(system, archetype.get());
+    try_registrate(mgr, system, archetype.get());
   }
   printf("[ECS] Register system %s\n", system.uniqueName.c_str());
   mgr.systems.push_back(std::move(system));
@@ -207,7 +222,7 @@ void register_event(EcsManager &mgr, EventHandler &&event)
 {
   for (const auto &[id, archetype] : mgr.archetypeMap)
   {
-    try_registrate(event, archetype.get());
+    try_registrate(mgr, event, archetype.get());
   }
   printf("[ECS] Register system %s\n", event.uniqueName.c_str());
   for (EventId eventId : event.eventIds)

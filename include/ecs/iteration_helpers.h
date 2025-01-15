@@ -15,12 +15,61 @@ struct PrtWrapper
   T *operator*() { return ptr; }
   T *operator[](int idx) { return ptr ? ptr + idx : ptr; }
   void operator++() { ptr = ptr ? ptr + 1 : ptr; }
+
+  static PrtWrapper<T> cast(std::vector<char *> *ptr, uint32_t idx) { return PrtWrapper<T>(ptr ? (T *)((*ptr)[idx]) : nullptr); }
+};
+
+// template <typename T = PrtWrapper<T>>
+// PrtWrapper<T> cast(std::vector<char *> *ptr, uint32_t idx)
+// {
+//   return PrtWrapper<T>(ptr ? (T *)((*ptr)[idx]) : nullptr);
+// }
+
+
+template<typename T>
+struct SingletonWrapper
+{
+  T *ptr;
+  SingletonWrapper(T *ptr) : ptr(ptr) {}
+  T &operator*() { return *ptr; }
+  T *operator[](int) { return ptr; }
+  void operator++() { }
 };
 
 template<typename T>
-struct restrict_type
+struct Ptr
+{/*
+  static std::enable_if<!ecs::TypeInfo<typename std::remove_const<T>::type>::isSingleton, T *>::type
+    cast(std::vector<char *> *ptr, uint32_t idx)
+  {
+    return ptr ? (T *)((*ptr)[idx]) : nullptr;
+  }
+  static std::enable_if<ecs::TypeInfo<typename std::remove_const<T>::type>::isSingleton, SingletonWrapper<T>>::type
+    cast(std::vector<char *> *ptr, uint32_t idx)
+  {
+    return SingletonWrapper<T>((T*)ptr);
+  } */
+
+  static auto cast(std::vector<char *> *ptr, uint32_t idx)
+  {
+    if constexpr (!ecs::TypeInfo<typename std::remove_const<T>::type>::isSingleton)
+    {
+      return ptr ? (T *)((*ptr)[idx]) : nullptr;
+    }
+    else
+    {
+      return SingletonWrapper<T>((T*)ptr);
+    }
+  }
+};
+
+template<typename T>
+struct restrict_type;
+
+template<typename T>
+struct restrict_type<Ptr<T>>
 {
-  using type = T __restrict__;
+  using type = T *__restrict__;
 };
 
 template<typename T>
@@ -29,8 +78,14 @@ struct restrict_type<PrtWrapper<T>>
   using type = PrtWrapper<T>;
 };
 
+template<typename T>
+struct restrict_type<SingletonWrapper<T>>
+{
+  using type = SingletonWrapper<T>;
+};
+
 template<size_t UNROLL_N, typename ...PtrArgs, typename Callable>
-static void query_chunk_iteration(Callable &&callable_query, uint32_t entities_count, typename restrict_type<PtrArgs>::type ...components)
+static void query_chunk_iteration(Callable &&callable_query, uint32_t entities_count, PtrArgs ...components)
 {
   #pragma unroll UNROLL_N
   for (uint32_t i = 0; i < entities_count; i++)
@@ -46,7 +101,7 @@ static void query_archetype_iteration(ecs_details::Archetype &archetype, const e
   for (uint32_t chunkIdx = 0, chunkCount = archetype.chunkCount, entityOffset = 0; chunkIdx < chunkCount; chunkIdx++, entityOffset += archetype.chunkSize)
   {
     uint32_t entitiesCount = std::min(archetype.entityCount - entityOffset, archetype.chunkSize);
-    query_chunk_iteration<4, CastArgs...>(std::move(callable_query), entitiesCount, (CastArgs)(chunks[I] ? (*chunks[I])[chunkIdx] : nullptr)...);
+    query_chunk_iteration<4>(std::move(callable_query), entitiesCount, CastArgs::cast(chunks[I], chunkIdx)...);
   }
 }
 
@@ -67,7 +122,7 @@ static void event_archetype_iteration(ecs_details::Archetype &archetype, const e
   for (uint32_t chunkIdx = 0, chunkCount = archetype.chunkCount, entityOffset = 0; chunkIdx < chunkCount; chunkIdx++, entityOffset += archetype.chunkSize)
   {
     uint32_t entitiesCount = std::min(archetype.entityCount - entityOffset, archetype.chunkSize);
-    event_chunk_iteration<4, CastArgs...>(std::forward<E>(event), std::move(callable_query), entitiesCount, (CastArgs)(chunks[I] ? (*chunks[I])[chunkIdx] : nullptr)...);
+    event_chunk_iteration<4, CastArgs...>(std::forward<E>(event), std::move(callable_query), entitiesCount, CastArgs::cast(chunks[I], chunkIdx)...);
   }
 }
 
@@ -76,7 +131,7 @@ static void event_invoke_for_entity(ecs_details::Archetype &archetype, const ecs
 {
   uint32_t chunkIdx = component_idx >> archetype.chunkSizePower;
   uint32_t offsetInChunk = component_idx & archetype.chunkMask;
-  callable_query(event, (((CastArgs)(chunks[I] ? (*chunks[I])[chunkIdx] : nullptr))[offsetInChunk])...);
+  callable_query(event, ((CastArgs::cast(chunks[I], chunkIdx))[offsetInChunk])...);
 }
 
 template<size_t N, typename ...CastArgs, typename Callable>
@@ -100,7 +155,7 @@ static void query_invoke_for_entity_impl(ecs_details::Archetype &archetype, cons
 {
   uint32_t chunkIdx = component_idx >> archetype.chunkSizePower;
   uint32_t offsetInChunk = component_idx & archetype.chunkMask;
-  callable_query((((CastArgs)(chunks[I] ? (*chunks[I])[chunkIdx] : nullptr))[offsetInChunk])...);
+  callable_query(((CastArgs::cast(chunks[I], chunkIdx))[offsetInChunk])...);
 }
 
 template<size_t N, typename ...CastArgs, typename Callable>

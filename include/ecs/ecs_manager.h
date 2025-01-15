@@ -10,6 +10,7 @@
 #include "ecs/query.h"
 #include "ecs/event.h"
 #include "ecs/singleton_component.h"
+#include "ecs/logger.h"
 
 namespace ecs
 {
@@ -60,6 +61,9 @@ struct EcsManager
 
   ecs::TypeId EntityIdTypeId;
   ecs::ComponentId eidComponentId;
+
+  ecs::LogLevel currentLogLevel = ecs::LogLevel::Verbose;
+  std::unique_ptr<ecs::ILogger> logger;
 
   EcsManager();
 

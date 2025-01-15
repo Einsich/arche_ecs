@@ -80,7 +80,7 @@ ecs::EntityId create_entity_sync(EcsManager &mgr, TemplateId templateId, Initial
   auto it = mgr.templates.find(templateId);
   if (it == mgr.templates.end())
   {
-    printf("[ECS] Error: Template not found\n");
+    ECS_LOG_ERROR(mgr).log("Template with hash %x not found", templateId);
     return EntityId();
   }
   const Template &templateRecord = it->second;
@@ -88,7 +88,7 @@ ecs::EntityId create_entity_sync(EcsManager &mgr, TemplateId templateId, Initial
   auto it2 = mgr.archetypeMap.find(templateRecord.archetypeId);
   if (it2 == mgr.archetypeMap.end())
   {
-    printf("[ECS] Error: Archetype not found\n");
+    ECS_LOG_ERROR(mgr).log("Archetype with hash %x not found", templateRecord.archetypeId);
     return EntityId();
   }
   ecs::EntityId eid = mgr.entityContainer.allocate_entity(ecs_details::EntityState::Alive);
@@ -130,7 +130,7 @@ std::vector<EntityId> create_entities_sync(EcsManager &mgr, TemplateId templateI
   auto it = mgr.templates.find(templateId);
   if (it == mgr.templates.end())
   {
-    printf("[ECS] Error: Template not found\n");
+    ECS_LOG_ERROR(mgr).log("Template with hash %x not found", templateId);
     return {};
   }
   const Template &templateRecord = it->second;
@@ -138,7 +138,7 @@ std::vector<EntityId> create_entities_sync(EcsManager &mgr, TemplateId templateI
   auto it2 = mgr.archetypeMap.find(templateRecord.archetypeId);
   if (it2 == mgr.archetypeMap.end())
   {
-    printf("[ECS] Error: Archetype not found\n");
+    ECS_LOG_ERROR(mgr).log("Archetype with hash %x not found", templateRecord.archetypeId);
     return {};
   }
   ecs_details::Archetype &archetype = *it2->second;
@@ -165,7 +165,7 @@ bool destroy_entity_sync(EcsManager &mgr, ecs::EntityId eid)
     auto it = mgr.archetypeMap.find(archetypeId);
     if (it == mgr.archetypeMap.end())
     {
-      printf("Archetype not found\n");
+      ECS_LOG_ERROR(mgr).log("Archetype with hash %x not found", archetypeId);
       return false;
     }
     const OnDisappear event;
@@ -204,7 +204,7 @@ void perform_delayed_entities_creation(EcsManager &mgr)
     auto it = mgr.templates.find(entity.templateId);
     if (it == mgr.templates.end())
     {
-      printf("[ECS] Error: Template not found\n");
+      ECS_LOG_ERROR(mgr).log("Template with hash %x not found", entity.templateId);
       continue;
     }
     const Template &templateRecord = it->second;
@@ -212,7 +212,7 @@ void perform_delayed_entities_creation(EcsManager &mgr)
     auto it2 = mgr.archetypeMap.find(templateRecord.archetypeId);
     if (it2 == mgr.archetypeMap.end())
     {
-      printf("[ECS] Error: Archetype not found\n");
+      ECS_LOG_ERROR(mgr).log("Archetype with hash %x not found", templateRecord.archetypeId);
       continue;
     }
     create_entity_sync(mgr, entity.eid, *it2->second, templateRecord.args, std::move(entity.initList));
@@ -224,7 +224,7 @@ void perform_delayed_entities_creation(EcsManager &mgr)
     auto it = mgr.templates.find(entity.templateId);
     if (it == mgr.templates.end())
     {
-      printf("[ECS] Error: Template not found\n");
+      ECS_LOG_ERROR(mgr).log("Template with hash %x not found", entity.templateId);
       continue;
     }
     const Template &templateRecord = it->second;
@@ -232,7 +232,7 @@ void perform_delayed_entities_creation(EcsManager &mgr)
     auto it2 = mgr.archetypeMap.find(templateRecord.archetypeId);
     if (it2 == mgr.archetypeMap.end())
     {
-      printf("[ECS] Error: Archetype not found\n");
+      ECS_LOG_ERROR(mgr).log("Archetype with hash %x not found", templateRecord.archetypeId);
       continue;
     }
     create_entities(mgr, std::move(entity.eids), *it2->second, templateRecord.args, std::move(entity.initSoaList));
@@ -323,7 +323,7 @@ static TemplateId template_registration(
   TemplateId templateId = hash(_name);
   if (mgr.templates.find(templateId) != mgr.templates.end())
   {
-    printf("Template \"%s\" already exists\n", _name);
+    ECS_LOG_ERROR(mgr).log("Template \"%s\" already exists", _name);
     return templateId;
   }
   components.push_back(ecs::ComponentInit{eid_component_id, ecs::EntityId()});
@@ -332,7 +332,7 @@ static TemplateId template_registration(
     auto it = mgr.templates.find(parent_template);
     if (it == mgr.templates.end())
     {
-      printf("Parent template not found\n");
+      ECS_LOG_ERROR(mgr).log("Parent template with hash %x not found", parent_template);
       return templateId;
     }
     const Template &parentTemplate = it->second;
@@ -394,7 +394,7 @@ const void *get_component(EcsManager &mgr, EntityId eid, ComponentId componentId
     auto it = mgr.archetypeMap.find(archetypeId);
     if (it == mgr.archetypeMap.end())
     {
-      printf("Archetype not found\n");
+      ECS_LOG_ERROR(mgr).log("Archetype with hash %x not found", archetypeId);
       return nullptr;
     }
     ecs_details::Archetype &archetype = *it->second;
@@ -424,7 +424,7 @@ void init_singletons(EcsManager &mgr)
       }
       else
       {
-        printf("Singleton component %s has no default constructor\n", typeDecl.typeName.c_str());
+        ECS_LOG_ERROR(mgr).log("Singleton component %s has no default constructor", typeDecl.typeName.c_str());
       }
     }
   }

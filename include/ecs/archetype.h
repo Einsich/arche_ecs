@@ -28,7 +28,7 @@ struct Archetype
   uint32_t chunkCount = 0;
 
   Archetype() = default;
-  Archetype(const ecs::TypeDeclarationMap &type_map, ecs::ArchetypeId archetype_id, ArchetypeComponentType &&_type, ecs::ArchetypeChunkSize chunk_size_power);
+  Archetype(const ecs::EcsManager &mgr, ecs::ArchetypeId archetype_id, ArchetypeComponentType &&_type, ecs::ArchetypeChunkSize chunk_size_power);
 
   int getComponentCollumnIndex(ecs::ComponentId componentId) const
   {

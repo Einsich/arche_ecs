@@ -22,7 +22,7 @@ static ecs::ArchetypeId get_archetype_id(const ArchetypeComponentType &type)
   return id;
 }
 
-Archetype::Archetype(const ecs::TypeDeclarationMap &type_map, ecs::ArchetypeId archetype_id, ArchetypeComponentType &&_type, ecs::ArchetypeChunkSize chunk_size_power) :
+Archetype::Archetype(const ecs::EcsManager &mgr, ecs::ArchetypeId archetype_id, ArchetypeComponentType &&_type, ecs::ArchetypeChunkSize chunk_size_power) :
   type(std::move(_type)), archetypeId(archetype_id)
 {
   assert(!type.empty());
@@ -31,10 +31,10 @@ Archetype::Archetype(const ecs::TypeDeclarationMap &type_map, ecs::ArchetypeId a
   for (const ecs::ComponentId componentId : type)
   {
     const ecs::TypeId typeId = ecs::get_type_id(componentId);
-    const ecs::TypeDeclaration *typeDeclaration = find_type_declaration(type_map, typeId);
+    const ecs::TypeDeclaration *typeDeclaration = find_type_declaration(mgr.typeMap, typeId);
     if (typeDeclaration == nullptr)
     {
-      printf("[ECS] Error: Type not found\n");
+      ECS_LOG_ERROR(mgr).log("Type with hash %x not found", typeId);
       continue;
     }
     collumns.emplace_back(chunk_size_power, typeDeclaration->sizeOfElement, typeDeclaration->alignmentOfElement, typeId);
@@ -86,7 +86,7 @@ void add_entity_to_archetype(Archetype &archetype, const ecs::EcsManager &mgr, c
           const char *componentName = mgr.componentMap.find(it->first)->second->name.c_str();
           const char *receivedType = mgr.typeMap.find(it->second.typeId)->second.typeName.c_str();
           const char *expectedType = mgr.typeMap.find(collumn.typeId)->second.typeName.c_str();
-          printf("[ECS] Error: Component %s has type %s but expected %s, during create_entity\n",
+          ECS_LOG_ERROR(mgr).log("Component %s has type %s but expected %s, during create_entity",
             componentName, receivedType, expectedType);
         }
       }
@@ -107,7 +107,7 @@ void add_entity_to_archetype(Archetype &archetype, const ecs::EcsManager &mgr, c
     // if there is no initialization data, construct default
     typeDeclaration->construct_default(dstData);
     // but this is error because we have to have initialization data for all components
-    printf("[ECS] Error: no initialization data for component %s\n", collumn.debugName.c_str());
+    ECS_LOG_ERROR(mgr).log("No initialization data for component %s", collumn.debugName.c_str());
   }
   archetype.entityCount++;
 }
@@ -138,7 +138,7 @@ void add_entities_to_archetype(Archetype &archetype, const ecs::EcsManager &mgr,
         const char *componentName = mgr.componentMap.find(it->first)->second->name.c_str();
         const char *receivedType = mgr.typeMap.find(componentDataSoa.typeId)->second.typeName.c_str();
         const char *expectedType = mgr.typeMap.find(collumn.typeId)->second.typeName.c_str();
-        printf("[ECS] Error: Component %s has type %s but expected %s, during create_entities\n",
+        ECS_LOG_ERROR(mgr).log("Component %s has type %s but expected %s, during create_entities",
           componentName, receivedType, expectedType);
       }
     }
@@ -159,7 +159,7 @@ void add_entities_to_archetype(Archetype &archetype, const ecs::EcsManager &mgr,
       typeDeclaration->construct_default(collumn.get_data(archetype.entityCount + i));
     }
     // but this is error because we have to have initialization data for all components
-    printf("[ECS] Error: no initialization data for component %s\n", collumn.debugName.c_str());
+    ECS_LOG_ERROR(mgr).log("No initialization data for component %s", collumn.debugName.c_str());
   }
   archetype.entityCount += requiredEntityCount;
 }
@@ -234,14 +234,14 @@ ecs::ArchetypeId get_or_create_archetype(ecs::EcsManager &mgr, ecs::InitializerL
         const char *componentName = cmpIt->second->name.c_str();
         const char *receivedType = mgr.typeMap.find(arg.second.typeId)->second.typeName.c_str();
         const char *expectedType = mgr.typeMap.find(cmpIt->second->typeId)->second.typeName.c_str();
-        printf("[ECS] Error: Component %s has type %s but expected %s, during instantiation template \"%s\"\n",
+        ECS_LOG_ERROR(mgr).log("Component %s has type %s but expected %s, during instantiation template \"%s\"",
           componentName, receivedType, expectedType, template_name);
       }
     }
     else
     {
       const char *receivedType = mgr.typeMap.find(arg.second.typeId)->second.typeName.c_str();
-      printf("[ECS] Error: Component %llx of type %s not found, during instantiation template \"%s\"\n", arg.first, receivedType, template_name);
+      ECS_LOG_ERROR(mgr).log("Component %llx of type %s not found, during instantiation template \"%s\"", arg.first, receivedType, template_name);
     }
 
     it = components.args.erase(it);
@@ -252,7 +252,7 @@ ecs::ArchetypeId get_or_create_archetype(ecs::EcsManager &mgr, ecs::InitializerL
 
   if (mgr.archetypeMap.find(archetypeId) == mgr.archetypeMap.end())
   {
-    register_archetype(mgr, Archetype(mgr.typeMap, archetypeId, std::move(type), chunk_size_power));
+    register_archetype(mgr, Archetype(mgr, archetypeId, std::move(type), chunk_size_power));
   }
 
   return archetypeId;

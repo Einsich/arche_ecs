@@ -55,7 +55,7 @@ static void dfs(uint32_t v, const Edges &edges, std::vector<NodeState> &used, st
 }
 
 template <typename GetNode>
-static std::vector<uint32_t> topological_sort(uint32_t nodeCount, const GetNode &get_node)
+static std::vector<uint32_t> topological_sort(EcsManager &mgr, uint32_t nodeCount, const GetNode &get_node)
 {
   Edges edge(nodeCount);
   std::vector<NodeState> used(nodeCount, NodeState::Black);
@@ -78,7 +78,7 @@ static std::vector<uint32_t> topological_sort(uint32_t nodeCount, const GetNode 
         {
           if (i == j)
           {
-            printf("system %s has itself in before\n", query.name.c_str());
+            ECS_LOG_ERROR(mgr).log("system %s has itself in before", query.name.c_str());
             continue;
           }
           edge[i].push_back(j);
@@ -86,7 +86,7 @@ static std::vector<uint32_t> topological_sort(uint32_t nodeCount, const GetNode 
       }
       else
       {
-        printf("%s doesn't exist for before %s\n", before.c_str(), query.name.c_str());
+        ECS_LOG_ERROR(mgr).log("system %s doesn't exist for before %s", before.c_str(), query.name.c_str());
       }
     }
     for (const std::string &after : query.after)
@@ -98,7 +98,7 @@ static std::vector<uint32_t> topological_sort(uint32_t nodeCount, const GetNode 
         {
           if (i == j)
           {
-            printf("system %s has itself in after\n", query.name.c_str());
+            ECS_LOG_ERROR(mgr).log("system %s has itself in after", query.name.c_str());
             continue;
           }
           edge[j].push_back(i);
@@ -106,15 +106,15 @@ static std::vector<uint32_t> topological_sort(uint32_t nodeCount, const GetNode 
       }
       else
       {
-        printf("%s doesn't exist for after %s\n", after.c_str(), query.name.c_str());
+        ECS_LOG_ERROR(mgr).log("system %s doesn't exist for after %s", after.c_str(), query.name.c_str());
       }
     }
   }
   const auto loger = [&](const std::vector<uint32_t> &nodes) {
-    printf("cycle detected :\n");
+    std::string msg = "cycle detected : \n";
     for (uint32_t i : nodes)
-      printf("%s -> ", get_node(i)->name.c_str());
-    printf("\n");
+      msg = msg + get_node(i)->name + " -> ";
+    ECS_LOG_ERROR(mgr).log(msg.c_str());
   };
   for (uint32_t i = 0; i < nodeCount; i++)
   {
@@ -136,13 +136,13 @@ void apply_reorder(std::vector<T> &vec, const std::vector<uint32_t> &order)
 void sort_systems(EcsManager &mgr)
 {
   {
-    std::vector<uint32_t> rightOrder = topological_sort(mgr.systems.size(), [&](uint32_t idx) { return &mgr.systems[idx]; });
+    std::vector<uint32_t> rightOrder = topological_sort(mgr, mgr.systems.size(), [&](uint32_t idx) { return &mgr.systems[idx]; });
     apply_reorder(mgr.systems, rightOrder);
   }
 
   for (auto &[id, events] : mgr.eventIdToHandlers)
   {
-    std::vector<uint32_t> rightOrder = topological_sort(events.size(), [&](uint32_t idx) { return &mgr.events[events[idx]]; });
+    std::vector<uint32_t> rightOrder = topological_sort(mgr, events.size(), [&](uint32_t idx) { return &mgr.events[events[idx]]; });
     apply_reorder(events, rightOrder);
   }
 }
@@ -203,7 +203,7 @@ void register_query(EcsManager &mgr, Query &&query)
   {
     try_registrate(mgr, query, archetype.get());
   }
-  printf("[ECS] Register query %s\n", query.uniqueName.c_str());
+  ECS_LOG_INFO_VERBOSE(mgr).log("Register query %s", query.uniqueName.c_str());
   mgr.queries[query.nameHash] = std::move(query);
 }
 
@@ -213,7 +213,7 @@ void register_system(EcsManager &mgr, System &&system)
   {
     try_registrate(mgr, system, archetype.get());
   }
-  printf("[ECS] Register system %s\n", system.uniqueName.c_str());
+  ECS_LOG_INFO_VERBOSE(mgr).log("Register system %s", system.uniqueName.c_str());
   mgr.systems.push_back(std::move(system));
 }
 
@@ -224,7 +224,7 @@ void register_event(EcsManager &mgr, EventHandler &&event)
   {
     try_registrate(mgr, event, archetype.get());
   }
-  printf("[ECS] Register system %s\n", event.uniqueName.c_str());
+  ECS_LOG_INFO_VERBOSE(mgr).log("Register event %s", event.uniqueName.c_str());
   for (EventId eventId : event.eventIds)
   {
     mgr.eventIdToHandlers[eventId].push_back(event.nameHash);

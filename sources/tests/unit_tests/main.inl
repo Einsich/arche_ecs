@@ -3,6 +3,7 @@
 #include <assert.h>
 #include "math_helper.h"
 #include "timer.h"
+#include "logger.h"
 
 void query_test(ecs::EcsManager &mgr);
 
@@ -133,6 +134,8 @@ int main()
     ECS_UNUSED(entityId1);
   }
   ecs::EcsManager mgr;
+
+  mgr.logger = std::unique_ptr<Logger>(new Logger());
 
   ecs::register_all_type_declarations(mgr);
 

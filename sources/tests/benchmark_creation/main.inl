@@ -79,6 +79,7 @@ void entity_creation_test(std::ofstream &benchmark_file, int N)
   // sizeof(std::vector<int>);
   // sizeof(float[4]);
   // sizeof(float[16]);
+  // if (false)
   {
     Timer timer("soa_creation");
     std::vector<float3> positions;
@@ -97,6 +98,7 @@ void entity_creation_test(std::ofstream &benchmark_file, int N)
     benchmark_file << timer.stop() << ";";
   }
 
+  // if (false)
   {
     Timer timer("aos_creation");
     struct Body
@@ -135,6 +137,7 @@ void entity_creation_test(std::ofstream &benchmark_file, int N)
       {mgr, "acceleration", float3{}},
     }}, ecs::ArchetypeChunkSize::Thousands);
 
+  // if (false)
   {
     Timer timer("create_entity_sync");
     for (int i = 0; i < N; i++)
@@ -151,10 +154,12 @@ void entity_creation_test(std::ofstream &benchmark_file, int N)
     }
     benchmark_file << timer.stop() << ";";
   }
+  // if (false)
   {
     Timer timer("_outdated_");
     benchmark_file << timer.stop() << ";";
   }
+  // if (false)
   {
     Timer timer("create_entities");
     std::vector<float3> positions;
@@ -213,6 +218,7 @@ void entity_creation_test(std::ofstream &benchmark_file, int N)
     }
     benchmark_file << totalTimer.stop() << ";";
   }
+  // if (false)
   {
     Timer timer("create_entities_async");
     std::vector<float3> positions;

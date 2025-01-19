@@ -80,13 +80,12 @@ namespace ecs
 
   struct LazyInit {};
 
-  struct ComponentInit final : public ecs::Any
+  struct ComponentInit final : public ecs::AnyComponent
   {
-    ComponentId componentId;
 
     template<typename ValueType, typename T = std::remove_cvref<ValueType>::type>
     ComponentInit(ComponentId component_id, ValueType &&_data) :
-        ecs::Any(std::move(_data), ecs::TypeInfo<T>::typeId), componentId(component_id) {}
+        ecs::Any(std::move(_data), ecs::TypeInfo<T>::typeId, component_id) {}
 
     template<typename ValueType, typename T = std::remove_cvref<ValueType>::type>
     ComponentInit(const char *component_name, ValueType &&_data) :
@@ -98,7 +97,7 @@ namespace ecs
 
     template<typename ValueType>
     ComponentInit(ComponentId component_id, const ValueType&_data) :
-        ecs::Any(_data, ecs::TypeInfo<T>::typeId), componentId(component_id) {}
+        ecs::Any(_data, ecs::TypeInfo<T>::typeId, component_id) {}
 
     template<typename ValueType>
     ComponentInit(const char *component_name, const ValueType &_data) :
@@ -109,18 +108,19 @@ namespace ecs
         ComponentInit(get_or_add_component<T>(manager, component_name), _data) {}
 
 
-    ComponentInit(ComponentId component_id, ecs::Any &&_data) :
-        ecs::Any(std::move(_data)), componentId(component_id) {}
+    ComponentInit(ecs::Any &&_data) :
+        ecs::Any(std::move(_data)) {}
 
-    ComponentInit(ComponentInit &&other) : ecs::Any(static_cast<ecs::Any&&>(std::move(other))), componentId(other.componentId)
+    ComponentInit(ComponentInit &&other) : ecs::Any(static_cast<ecs::Any&&>(std::move(other)))
     {
-      other.componentId = {};
     }
 
     ComponentInit(const ComponentInit &other) = delete;
 
     ComponentInit &operator=(const ComponentInit &other) = delete;
   };
+
+  static_assert(sizeof(ComponentInit) == 64);
 
   struct ComponentSoaInit final : public ComponentDataSoa
   {
@@ -155,15 +155,11 @@ namespace ecs
     struct Empty {};
     InitializerList(Empty) {}
 
-    InitializerList(ecs::EcsManager &mgr)
-    {
-      args = ecs_details::get_init_list(mgr);
-    }
+    InitializerList(ecs::EcsManager &mgr) : args(ecs_details::get_init_list(mgr)) {}
 
     template<size_t N>
-    InitializerList(ecs::EcsManager &mgr, ecs::ComponentInit (&&_args)[N])
+    InitializerList(ecs::EcsManager &mgr, ecs::ComponentInit (&&_args)[N]) : args(ecs_details::get_init_list(mgr))
     {
-      args = ecs_details::get_init_list(mgr);
       args.reserve(N + 1 /*entityId*/);
       for (size_t i = 0; i < N; i++)
       {

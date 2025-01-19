@@ -344,7 +344,7 @@ static TemplateId template_registration(
       }
       else
       {
-        components.push_back({componentId, componentInit.copy()});
+        components.push_back(componentInit.copy());
       }
     }
   }

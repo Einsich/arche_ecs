@@ -39,9 +39,9 @@ struct Archetype
 };
 
 // return index of the added entity
-void add_entity_to_archetype(Archetype &archetype, const ecs::EcsManager &mgr, const ecs::InitializerList &template_init, ecs::InitializerList &&override_list);
+void add_entity_to_archetype(Archetype &archetype, ecs::EcsManager &mgr, const ecs::InitializerList &template_init, ecs::InitializerList &&override_list);
 
-void add_entities_to_archetype(Archetype &archetype, const ecs::EcsManager &mgr, const ecs::InitializerList &template_init, ecs::InitializerSoaList &&override_soa_list);
+void add_entities_to_archetype(Archetype &archetype, ecs::EcsManager &mgr, const ecs::InitializerList &template_init, ecs::InitializerSoaList &&override_soa_list);
 
 void remove_entity_from_archetype(Archetype &archetype, const ecs::TypeDeclarationMap &type_map, uint32_t entityIndex);
 

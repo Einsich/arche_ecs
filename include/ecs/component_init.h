@@ -4,10 +4,16 @@
 #include "ecs/type_declaration_helper.h"
 namespace ecs
 {
-
   struct EcsManager;
+}
+namespace ecs_details
+{
+  using InitializerListType = ska::flat_hash_map<ecs::ComponentId, ecs::Any>;
+  InitializerListType get_init_list(ecs::EcsManager &mgr);
+} // namespace ecs_details
 
-
+namespace ecs
+{
   struct ComponentDataSoa
   {
     void *vector_ptr;
@@ -143,23 +149,39 @@ namespace ecs
 
   struct InitializerList
   {
-    ska::flat_hash_map<ComponentId, ecs::Any> args;
+    using type = ska::flat_hash_map<ComponentId, ecs::Any>;
+    type args;
 
-    InitializerList() = default;
+    struct Empty {};
+    InitializerList(Empty) {}
+
+    InitializerList(ecs::EcsManager &mgr)
+    {
+      args = ecs_details::get_init_list(mgr);
+    }
 
     template<size_t N>
-    InitializerList(ecs::ComponentInit (&&_args)[N])
+    InitializerList(ecs::EcsManager &mgr, ecs::ComponentInit (&&_args)[N])
     {
+      args = ecs_details::get_init_list(mgr);
       args.reserve(N + 1 /*entityId*/);
       for (size_t i = 0; i < N; i++)
       {
-        args.insert({_args[i].componentId, std::move(static_cast<ecs::Any &&>(_args[i]))});
+        args.emplace(_args[i].componentId, std::move(static_cast<ecs::Any &&>(_args[i])));
       }
     }
+    InitializerList(InitializerList &&other) : args(std::move(other.args)) {}
+    InitializerList &operator=(InitializerList &&other)
+    {
+      args = std::move(other.args);
+      return *this;
+    }
+    InitializerList(const InitializerList &other) = delete;
+    InitializerList &operator=(const InitializerList &other) = delete;
 
     void push_back(ecs::ComponentInit &&componentInit)
     {
-      args.insert({componentInit.componentId, std::move(static_cast<ecs::Any &&>(componentInit))});
+      args.emplace(componentInit.componentId, std::move(static_cast<ecs::Any &&>(componentInit)));
     }
 
     void reserve(size_t count)

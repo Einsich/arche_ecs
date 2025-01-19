@@ -19,4 +19,5 @@ if True:
   ]
   for test in Tests:
     os.system(f"{os.getcwd()}/bin/rel/sources/tests/benchmark_creation.exe --output=benchmarks/{test[0]}.csv")
-    os.system(f"python3 benchmarks/scripts/build_plot.py benchmarks/{test[0]} \"{test[1]}\" \"(1, 2, 3, 6, 4, 5)\"")
+    # os.system(f"python3 benchmarks/scripts/build_plot.py benchmarks/{test[0]} \"{test[1]}\" \"(1, )\"")
+    os.system(f"python3 benchmarks/scripts/build_plot.py benchmarks/{test[0]} \"{test[1]}\" \"(1, 2, 3, 6, 5, 7, 8, 9, 10)\"")

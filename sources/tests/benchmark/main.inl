@@ -465,7 +465,7 @@ void ecs_test(std::ofstream &benchmark_file, int TESTS_COUNT, int N)
   ecs::sort_systems(mgr);
 
   ecs::TemplateId bodyTemplate = template_registration(mgr, "body",
-    {{
+    {mgr, {
       {mgr, "position", float3{}},
       {mgr, "velocity", float3{}},
       {mgr, "acceleration", float3{}},
@@ -479,7 +479,7 @@ void ecs_test(std::ofstream &benchmark_file, int TESTS_COUNT, int N)
       float f = i;
       ecs::create_entity(mgr,
         bodyTemplate,
-        {{
+        {mgr, {
           {"position", float3{f, f, f}},
           {"velocity", float3{f, f, f}},
           {"acceleration", float3{1.f, 1.f, 1.f}}

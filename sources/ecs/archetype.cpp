@@ -62,7 +62,7 @@ static void try_add_chunk(Archetype &archetype, int requiredEntityCount)
   }
 }
 
-void add_entity_to_archetype(Archetype &archetype, const ecs::EcsManager &mgr, const ecs::InitializerList &template_init, ecs::InitializerList &&override_list)
+void add_entity_to_archetype(Archetype &archetype, ecs::EcsManager &mgr, const ecs::InitializerList &template_init, ecs::InitializerList &&override_list)
 {
   try_add_chunk(archetype, 1);
   for (ecs_details::Collumn &collumn : archetype.collumns)
@@ -110,9 +110,10 @@ void add_entity_to_archetype(Archetype &archetype, const ecs::EcsManager &mgr, c
     ECS_LOG_ERROR(mgr).log("No initialization data for component %s", collumn.debugName.c_str());
   }
   archetype.entityCount++;
+  ecs_details::consume_init_list(mgr, std::move(override_list));
 }
 
-void add_entities_to_archetype(Archetype &archetype, const ecs::EcsManager &mgr, const ecs::InitializerList &template_init, ecs::InitializerSoaList &&override_soa_list)
+void add_entities_to_archetype(Archetype &archetype, ecs::EcsManager &mgr, const ecs::InitializerList &template_init, ecs::InitializerSoaList &&override_soa_list)
 {
   int requiredEntityCount = override_soa_list.size();
   try_add_chunk(archetype, requiredEntityCount);

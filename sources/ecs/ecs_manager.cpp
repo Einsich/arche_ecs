@@ -99,7 +99,7 @@ ecs::EntityId create_entity_sync(EcsManager &mgr, TemplateId templateId, Initial
 ecs::EntityId create_entity(EcsManager &mgr, TemplateId templateId, InitializerList &&init_list)
 {
   ecs::EntityId eid = mgr.entityContainer.allocate_entity(ecs_details::EntityState::AsyncCreation);
-  mgr.delayedEntities.push_back({templateId, eid, std::move(init_list)});
+  mgr.delayedEntities.push_back(ecs::EcsManager::DelayedEntity(templateId, eid, std::move(init_list)));
   return eid;
 }
 
@@ -431,3 +431,24 @@ void init_singletons(EcsManager &mgr)
 }
 
 } // namespace ecs
+
+namespace ecs_details
+{
+
+void consume_init_list(ecs::EcsManager &mgr, ecs::InitializerList &&init_list)
+{
+  init_list.args.clear();
+  mgr.initializersPool.push_back(std::move(init_list.args));
+}
+
+ecs::InitializerList::type get_init_list(ecs::EcsManager &mgr)
+{
+  if (mgr.initializersPool.empty())
+  {
+    return {};
+  }
+  ecs::InitializerList::type initList = std::move(mgr.initializersPool.back());
+  mgr.initializersPool.pop_back();
+  return initList;
+}
+} // namespace ecs_details

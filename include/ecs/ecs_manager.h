@@ -31,9 +31,14 @@ struct EcsManager
 
   struct DelayedEntity
   {
-    TemplateId templateId;
-    ecs::EntityId eid;
     InitializerList initList;
+    ecs::EntityId eid;
+    TemplateId templateId;
+    DelayedEntity(TemplateId _templateId, ecs::EntityId _eid, InitializerList &&_initList) : initList(std::move(_initList)), eid(_eid), templateId(_templateId) {}
+    DelayedEntity(const DelayedEntity &) = delete;
+    DelayedEntity &operator=(const DelayedEntity &) = delete;
+    DelayedEntity(DelayedEntity &&) = default;
+    DelayedEntity &operator=(DelayedEntity &&) = default;
   };
 
   struct DelayedEntitySoa
@@ -52,6 +57,8 @@ struct EcsManager
   ska::flat_hash_map<EventId, std::vector<NameHash>> eventIdToHandlers;
   std::vector<DelayedEvent> delayedEvents;
   std::vector<DelayedEntity> delayedEntities;
+  std::vector<ecs::InitializerList::type> initializersPool;
+
   std::vector<DelayedEntitySoa> delayedEntitiesSoa;
   std::vector<ecs::EntityId> delayedEntitiesDestroy;
   ecs_details::EntityContainer entityContainer;
@@ -69,6 +76,15 @@ struct EcsManager
 
 };
 
+inline void preallocate_initializers(EcsManager &mgr, size_t count, size_t size)
+{
+  mgr.initializersPool.resize(count);
+  for (auto &init : mgr.initializersPool)
+  {
+    init.reserve(size + 1);
+  }
+}
+
 template <typename T>
 ComponentId get_or_add_component(EcsManager &mgr, const char *component_name)
 {
@@ -76,3 +92,9 @@ ComponentId get_or_add_component(EcsManager &mgr, const char *component_name)
 }
 
 } // namespace ecs
+
+namespace ecs_details
+{
+void consume_init_list(ecs::EcsManager &mgr, ecs::InitializerList &&init_list);
+ecs::InitializerList::type get_init_list(ecs::EcsManager &mgr);
+} // namespace ecs_details

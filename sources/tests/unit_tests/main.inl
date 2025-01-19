@@ -88,6 +88,7 @@ ECS_EVENT() update_event(const UpdateEvent &, ecs::EntityId eid, float3 &positio
 
 ECS_EVENT() heavy_event(const HeavyEvent &event, ecs::EntityId eid)
 {
+  ECS_UNUSED(event);
   assert(event.data.size() == 100);
   printf("heavy_event [%d/%d]\n", eid.entityIndex, eid.generation);
 }
@@ -161,20 +162,20 @@ int main()
   }
 
   ecs::TemplateId template1 = template_registration(mgr, "point",
-    {{
+    {mgr, {
       {positionId, float3{}},
       {velocityId, float3{}}
     }}, ecs::ArchetypeChunkSize::Dozens);
 
   ecs::TemplateId template2 = template_registration(mgr, "named_point",
-    {{
+    {mgr, {
       {velocityId, float3{}},
       {positionId, float3{}},
       {nameId, std::string{}}
     }}, ecs::ArchetypeChunkSize::Dozens);
 
   ecs::TemplateId template3 = template_registration(mgr, "named_alive_point",
-    {{
+    {mgr, {
       {velocityId, float3{}},
       {positionId, float3{}},
       {nameId, std::string{}},
@@ -187,15 +188,21 @@ int main()
   }
 
 
+  const float3 positionValue = float3{1, 2, 3};
+  const float3 velocityValue = float3{4, 5, 6};
+  const float3 newPositionValue = float3{3, 2, 1};
+  ECS_UNUSED(positionValue);
+  ECS_UNUSED(velocityValue);
+  ECS_UNUSED(newPositionValue);
+
   {
-    ecs::InitializerList args;
+    ecs::InitializerList args(mgr);
     args.push_back(ecs::ComponentInit{"position", float3{1, 2, 3}});
     args.push_back(ecs::ComponentInit{"velocity", float3{4, 5, 6}});
     ecs::EntityId eid = ecs::create_entity_sync(mgr, template1, std::move(args));
-    ECS_UNUSED(eid);
-    const float3 positionValue = float3{1, 2, 3};
-    const float3 newPositionValue = float3{3, 2, 1};
     float3 newPositionValueRW = float3{3, 2, 1};
+    ECS_UNUSED(eid);
+    ECS_UNUSED(newPositionValueRW);
     assert(*ecs::get_component<float3>(mgr, eid, "position") == positionValue);
     assert(*ecs::get_rw_component<float3>(mgr, eid, "position") == positionValue);
     assert(ecs::get_component<int>(mgr, eid, "position") == nullptr);
@@ -206,11 +213,9 @@ int main()
     assert(*ecs::get_component<float3>(mgr, eid, "position") == newPositionValue);
   }
 
-  const float3 positionValue = float3{1, 2, 3};
-  const float3 velocityValue = float3{4, 5, 6};
 
   {
-    ecs::InitializerList args;
+    ecs::InitializerList args(mgr);
     args.push_back(ecs::ComponentInit{"position", float3{1, 2, 3}});
     args.push_back(ecs::ComponentInit{"velocity", float3{4, 5, 6}});
 
@@ -270,7 +275,7 @@ int main()
 
   ecs::create_entity_sync(mgr,
     template3,
-    ecs::InitializerList{
+    ecs::InitializerList{mgr,
       {
         ecs::ComponentInit{"position", float3{7, 8, 9}},
         ecs::ComponentInit{"velocity", float3{10, 11, 12}},
@@ -281,27 +286,27 @@ int main()
   );
 
   ecs::TemplateId movableTemplate = template_registration(mgr, "movable",
-    {{
+    {mgr, {
       {positionId, float3{0, 0, 0}},
       {velocityId, float3{0, 0, 0}}
     }}
   );
   ecs::TemplateId brickTemplate = template_registration(mgr, "brick", movableTemplate,
-    {{
+    {mgr, {
       {positionId, float3{1, 0, 0}},
       {healthId, 10},
       {nameId, std::string("brick")}
     }}
   );
   ecs::TemplateId humanTemplate = template_registration(mgr, "human", movableTemplate,
-    {{
+    {mgr, {
       {positionId, float3{2, 0, 0}},
       // {healthId, 50},
       {nameId, std::string("human")}
     }}
   );
   ecs::TemplateId bigBrickTemplate = template_registration(mgr, "bigbrick", brickTemplate,
-    {{
+    {mgr, {
       {positionId, float3{3, 0, 0}},
       {healthId, 100}
     }}
@@ -321,7 +326,7 @@ int main()
       float f = i;
       ecs::EntityId eid = ecs::create_entity_sync(mgr,
         template2,
-        {{
+        {mgr, {
           {"position", float3{f, f, f}},
           // {velocityId, float3{f, f, f}},
           {"name", std::string("very_long_node_name") + std::to_string(i)}

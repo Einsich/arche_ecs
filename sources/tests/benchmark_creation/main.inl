@@ -38,8 +38,9 @@ int main(int argc, char *argv[])
   benchmark_file <<
     "count;" <<
     "soa_creation;" << "aos_creation;" <<
-    "create_entity;" << "create_entity_reuse_initializer_list;" <<
-    "prepare_create_entities;" << "create_entities;" <<
+    "create_entity_sync;" << "_outdated_;" <<
+    "prepare_create_entities;" << "create_entities_sync;" <<
+    "create_entity_async;" << "perform_delayed_entities_creation;" << "create_entity_async_total;" << "create_entities_async;" <<
     std::ctime(&currentTime);
 
   {
@@ -125,21 +126,23 @@ void entity_creation_test(std::ofstream &benchmark_file, int N)
 
   ecs::sort_systems(mgr);
 
+  ecs::preallocate_initializers(mgr, N + 100, 3);
+
   ecs::TemplateId bodyTemplate = template_registration(mgr, "body",
-    {{
+    {mgr, {
       {mgr, "position", float3{}},
       {mgr, "velocity", float3{}},
       {mgr, "acceleration", float3{}},
     }}, ecs::ArchetypeChunkSize::Thousands);
 
   {
-    Timer timer("create_entity");
+    Timer timer("create_entity_sync");
     for (int i = 0; i < N; i++)
     {
       float f = i;
-      ecs::create_entity(mgr,
+      ecs::create_entity_sync(mgr,
         bodyTemplate,
-        {{
+        {mgr, {
           {"position", float3{f, f, f}},
           {"velocity", float3{f, f, f}},
           {"acceleration", float3{1.f, 1.f, 1.f}}
@@ -149,20 +152,7 @@ void entity_creation_test(std::ofstream &benchmark_file, int N)
     benchmark_file << timer.stop() << ";";
   }
   {
-    Timer timer("create_entity_reuse_initializer_list");
-    ecs::InitializerList init;
-    for (int i = 0; i < N; i++)
-    {
-      float f = i;
-      init.push_back({"position", float3{f, f, f}});
-      init.push_back({"velocity", float3{f, f, f}});
-      init.push_back({"acceleration", float3{1.f, 1.f, 1.f}});
-      ecs::create_entity(mgr,
-        bodyTemplate,
-        std::move(init)
-      );
-      init.clear();
-    }
+    Timer timer("_outdated_");
     benchmark_file << timer.stop() << ";";
   }
   {
@@ -181,7 +171,6 @@ void entity_creation_test(std::ofstream &benchmark_file, int N)
       accelerations.push_back({1.f, 1.f, 1.f});
     }
 
-    // this code id too unoptimal, because of ComponentDataSoa implementation
     ecs::InitializerSoaList init =
       {{
           {mgr, "position", std::move(positions)},
@@ -190,11 +179,66 @@ void entity_creation_test(std::ofstream &benchmark_file, int N)
       }};
 
     benchmark_file << timer.get_time() << ";";
-    // Timer timer("create_entities");
+
+    ecs::create_entities_sync(mgr,
+      bodyTemplate,
+      std::move(init)
+    );
+    benchmark_file << timer.stop() << ";";
+  }
+
+  {
+    mgr.delayedEntities.reserve(N);
+    Timer totalTimer("create_entity_async_total");
+    {
+      Timer timer("create_entity_async");
+      for (int i = 0; i < N; i++)
+      {
+        float f = i;
+        ecs::create_entity(mgr,
+          bodyTemplate,
+          {mgr, {
+            {"position", float3{f, f, f}},
+            {"velocity", float3{f, f, f}},
+            {"acceleration", float3{1.f, 1.f, 1.f}}
+          }}
+        );
+      }
+      benchmark_file << timer.stop() << ";";
+    }
+    {
+      Timer timer("perform_delayed_entities_creation");
+      ecs::perform_delayed_entities_creation(mgr);
+      benchmark_file << timer.stop() << ";";
+    }
+    benchmark_file << totalTimer.stop() << ";";
+  }
+  {
+    Timer timer("create_entities_async");
+    std::vector<float3> positions;
+    std::vector<float3> velocities;
+    std::vector<float3> accelerations;
+    positions.reserve(N);
+    velocities.reserve(N);
+    accelerations.reserve(N);
+    for (int i = 0; i < N; i++)
+    {
+      float f = i;
+      positions.push_back({f, f, f});
+      velocities.push_back({f, f, f});
+      accelerations.push_back({1.f, 1.f, 1.f});
+    }
+    ecs::InitializerSoaList init =
+      {{
+          {mgr, "position", std::move(positions)},
+          {mgr, "velocity", std::move(velocities)},
+          {mgr, "acceleration", std::move(accelerations)},
+      }};
     ecs::create_entities(mgr,
       bodyTemplate,
       std::move(init)
     );
+    ecs::perform_delayed_entities_creation(mgr);
     benchmark_file << timer.stop() << ";";
   }
 

@@ -33,19 +33,25 @@ struct Query
     ComponentAccess access;
   };
 
-  std::string name;
-  std::string uniqueName;
-  NameHash nameHash;
+  ska::flat_hash_map<ArchetypeId, ArchetypeRecord> archetypesCache;
+
   std::vector<ComponentAccessInfo> querySignature;
 
   std::vector<ComponentId> requireComponents; // components without reading access
   std::vector<ComponentId> excludeComponents;
 
-  std::vector<std::string> before;
-  std::vector<std::string> after;
+  std::vector<ecs_details::tiny_string> before;
+  std::vector<ecs_details::tiny_string> after;
 
-  ska::flat_hash_map<ArchetypeId, ArchetypeRecord> archetypesCache;
+  ecs_details::tiny_string name;
+  ecs_details::tiny_string uniqueName;
+  NameHash nameHash;
+
 };
+
+static_assert(sizeof(Query) == 184);
+static_assert(sizeof(Query::archetypesCache) == 40);
+static_assert(sizeof(Query::before) == 24);
 
 struct System final : public Query
 {

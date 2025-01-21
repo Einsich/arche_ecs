@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <vector>
-#include <string>
 #include <memory>
 #include "ecs/ska/flat_hash_map.hpp"
 

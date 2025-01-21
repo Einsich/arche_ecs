@@ -1,6 +1,7 @@
 #pragma once
 #include "ecs/config.h"
 #include "ecs/fnv_hash.h"
+#include "ecs/tiny_string.h"
 
 namespace ecs
 {
@@ -8,9 +9,9 @@ namespace ecs
 
 struct ComponentDeclaration
 {
-  TypeId typeId;
-  std::string name;
+  ecs_details::tiny_string name;
   ComponentId componentId; // hash(hash(type), hash(name))
+  TypeId typeId;
 };
 
 inline constexpr ComponentId get_component_id(TypeId typeId, NameHash component_name)

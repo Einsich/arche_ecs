@@ -6,9 +6,16 @@
 namespace ecs
 {
 
+struct TemplateInitializer
+{
+  ecs::AnyComponent component;
+  ecs_details::tiny_string info;
+  bool needToTrack;
+};
+
 struct Template
 {
-  std::string name;
+  ecs_details::tiny_string name;
   InitializerList args = InitializerList(InitializerList::Empty{});
   ArchetypeId archetypeId;
   std::vector<TemplateId> composition;

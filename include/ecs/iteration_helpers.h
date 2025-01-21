@@ -19,12 +19,6 @@ struct PrtWrapper
   static PrtWrapper<T> cast(std::vector<char *> *ptr, uint32_t idx) { return PrtWrapper<T>(ptr ? (T *)((*ptr)[idx]) : nullptr); }
 };
 
-// template <typename T = PrtWrapper<T>>
-// PrtWrapper<T> cast(std::vector<char *> *ptr, uint32_t idx)
-// {
-//   return PrtWrapper<T>(ptr ? (T *)((*ptr)[idx]) : nullptr);
-// }
-
 
 template<typename T>
 struct SingletonWrapper
@@ -38,18 +32,7 @@ struct SingletonWrapper
 
 template<typename T>
 struct Ptr
-{/*
-  static std::enable_if<!ecs::TypeInfo<typename std::remove_const<T>::type>::isSingleton, T *>::type
-    cast(std::vector<char *> *ptr, uint32_t idx)
-  {
-    return ptr ? (T *)((*ptr)[idx]) : nullptr;
-  }
-  static std::enable_if<ecs::TypeInfo<typename std::remove_const<T>::type>::isSingleton, SingletonWrapper<T>>::type
-    cast(std::vector<char *> *ptr, uint32_t idx)
-  {
-    return SingletonWrapper<T>((T*)ptr);
-  } */
-
+{
   static auto cast(std::vector<char *> *ptr, uint32_t idx)
   {
     if constexpr (!ecs::TypeInfo<typename std::remove_const<T>::type>::isSingleton)

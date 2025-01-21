@@ -350,7 +350,7 @@ static TemplateId template_registration(
   }
   ArchetypeId archetypeId = ecs_details::get_or_create_archetype(mgr, components, chunk_size_power, _name);
 
-  Template templateRecord{std::string(_name), std::move(components), archetypeId, {}};
+  Template templateRecord{ecs_details::tiny_string(_name), std::move(components), archetypeId, {}};
 
   mgr.templates[templateId] = std::move(templateRecord);
 
@@ -401,7 +401,7 @@ const void *get_component(EcsManager &mgr, EntityId eid, ComponentId componentId
     int collumnIdx = archetype.getComponentCollumnIndex(componentId);
     if (collumnIdx != -1)
     {
-      return archetype.collumns[collumnIdx].get_data(componentIndex);
+      return archetype.getData(archetype.collumns[collumnIdx], componentIndex);
     }
   }
   return nullptr;

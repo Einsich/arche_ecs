@@ -62,14 +62,14 @@ static std::vector<uint32_t> topological_sort(EcsManager &mgr, uint32_t nodeCoun
   std::vector<uint32_t> answer;
   answer.reserve(nodeCount);
 
-  ska::flat_hash_map<std::string, std::vector<uint32_t>> nameMap;
+  ska::flat_hash_map<ecs_details::tiny_string, std::vector<uint32_t>> nameMap;
   for (uint32_t i = 0; i < nodeCount; i++)
     nameMap[get_node(i)->name].push_back(i);
 
   for (uint32_t i = 0; i < nodeCount; i++)
   {
     const auto &query = *get_node(i);
-    for (const std::string &before : query.before)
+    for (const ecs_details::tiny_string &before : query.before)
     {
       auto it = nameMap.find(before);
       if (it != nameMap.end())
@@ -89,7 +89,7 @@ static std::vector<uint32_t> topological_sort(EcsManager &mgr, uint32_t nodeCoun
         ECS_LOG_ERROR(mgr).log("system %s doesn't exist for before %s", before.c_str(), query.name.c_str());
       }
     }
-    for (const std::string &after : query.after)
+    for (const ecs_details::tiny_string &after : query.after)
     {
       auto it = nameMap.find(after);
       if (it != nameMap.end())
@@ -111,10 +111,15 @@ static std::vector<uint32_t> topological_sort(EcsManager &mgr, uint32_t nodeCoun
     }
   }
   const auto loger = [&](const std::vector<uint32_t> &nodes) {
-    std::string msg = "cycle detected : \n";
+
+    constexpr int MAX_BUFFER_SIZE = 1024;
+    char buff[MAX_BUFFER_SIZE];
+    int length = 0;
+    length += snprintf(buff + length, MAX_BUFFER_SIZE - length, "cycle detected : \n");
     for (uint32_t i : nodes)
-      msg = msg + get_node(i)->name + " -> ";
-    ECS_LOG_ERROR(mgr).log(msg.c_str());
+      length += snprintf(buff + length, MAX_BUFFER_SIZE - length, "%s -> ", get_node(i)->name.c_str());
+
+    ECS_LOG_ERROR(mgr).log(buff);
   };
   for (uint32_t i = 0; i < nodeCount; i++)
   {

@@ -23,7 +23,11 @@ static ecs::ArchetypeId get_archetype_id(const ArchetypeComponentType &type)
 }
 
 Archetype::Archetype(const ecs::EcsManager &mgr, ecs::ArchetypeId archetype_id, ArchetypeComponentType &&_type, ecs::ArchetypeChunkSize chunk_size_power) :
-  type(std::move(_type)), archetypeId(archetype_id)
+  type(std::move(_type)),
+  archetypeId(archetype_id),
+  chunkSize(1 << chunk_size_power),
+  chunkSizePower(chunk_size_power),
+  chunkMask(chunkSize - 1)
 {
   assert(!type.empty());
   collumns.reserve(type.size());
@@ -39,13 +43,10 @@ Archetype::Archetype(const ecs::EcsManager &mgr, ecs::ArchetypeId archetype_id, 
     }
     collumns.emplace_back(chunk_size_power, typeDeclaration->sizeOfElement, typeDeclaration->alignmentOfElement, typeId);
     ecs_details::Collumn &collumn = collumns.back();
-    collumn.debugName = typeDeclaration->typeName;
+    collumn.debugName = typeDeclaration->typeName.c_str();
     collumn.componentId = componentId;
     componentToCollumnIndex[componentId] = collumns.size() - 1;
   }
-  chunkSize = collumns[0].chunkSize;
-  chunkSizePower = collumns[0].chunkSizePower;
-  chunkMask = collumns[0].chunkMask;
 }
 
 static void try_add_chunk(Archetype &archetype, int requiredEntityCount)
@@ -67,7 +68,7 @@ void add_entity_to_archetype(Archetype &archetype, ecs::EcsManager &mgr, const e
   try_add_chunk(archetype, 1);
   for (ecs_details::Collumn &collumn : archetype.collumns)
   {
-    void *dstData = collumn.get_data(archetype.entityCount);
+    void *dstData = archetype.getData(collumn, archetype.entityCount);
     const ecs::TypeDeclaration *typeDeclaration = find_type_declaration(mgr.typeMap, collumn.typeId);
     // firstly check initialization data in override_list and move it
     auto it = override_list.args.find(collumn.componentId);
@@ -130,7 +131,7 @@ void add_entities_to_archetype(Archetype &archetype, ecs::EcsManager &mgr, const
       {
         for (int i = 0; i < requiredEntityCount; i++)
         {
-          typeDeclaration->move_construct(collumn.get_data(archetype.entityCount + i), componentDataSoa.get_data(i));
+          typeDeclaration->move_construct(archetype.getData(collumn, archetype.entityCount + i), componentDataSoa.get_data(i));
         }
         continue;
       }
@@ -150,14 +151,14 @@ void add_entities_to_archetype(Archetype &archetype, ecs::EcsManager &mgr, const
       const ecs::Any &componentData = it2->second;
       for (int i = 0; i < requiredEntityCount; i++)
       {
-        typeDeclaration->copy_construct(collumn.get_data(archetype.entityCount + i), componentData.data());
+        typeDeclaration->copy_construct(archetype.getData(collumn, archetype.entityCount + i), componentData.data());
       }
       continue;
     }
     // if there is no initialization data, construct default
     for (int i = 0; i < requiredEntityCount; i++)
     {
-      typeDeclaration->construct_default(collumn.get_data(archetype.entityCount + i));
+      typeDeclaration->construct_default(archetype.getData(collumn, archetype.entityCount + i));
     }
     // but this is error because we have to have initialization data for all components
     ECS_LOG_ERROR(mgr).log("No initialization data for component %s", collumn.debugName.c_str());
@@ -170,11 +171,11 @@ void remove_entity_from_archetype(Archetype &archetype, const ecs::TypeDeclarati
   for (ecs_details::Collumn &collumn : archetype.collumns)
   {
     const ecs::TypeDeclaration *typeDeclaration = find_type_declaration(type_map, collumn.typeId);
-    void *removedEntityComponentPtr = collumn.get_data(entityIndex);
+    void *removedEntityComponentPtr = archetype.getData(collumn, entityIndex);
     typeDeclaration->destruct(removedEntityComponentPtr);
     if (entityIndex != archetype.entityCount - 1)
     {
-      void *lastEntityComponentPtr = collumn.get_data(archetype.entityCount - 1);
+      void *lastEntityComponentPtr = archetype.getData(collumn, archetype.entityCount - 1);
       typeDeclaration->move_construct(removedEntityComponentPtr, lastEntityComponentPtr);
     }
   }
@@ -188,7 +189,7 @@ void destroy_all_entities_from_archetype(Archetype &archetype, const ecs::TypeDe
     const ecs::TypeDeclaration *typeDeclaration = find_type_declaration(type_map, collumn.typeId);
     for (uint32_t i = 0; i < archetype.entityCount; i++)
     {
-      void *entityComponentPtr = collumn.get_data(i);
+      void *entityComponentPtr = archetype.getData(collumn, i);
       typeDeclaration->destruct(entityComponentPtr);
     }
   }

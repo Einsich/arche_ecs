@@ -36,6 +36,10 @@ struct Archetype
     return it != componentToCollumnIndex.end() ? it->second : -1;
   }
 
+  char *getData(ecs_details::Collumn &collumn, uint32_t linear_index)
+  {
+    return collumn.chunks[linear_index >> chunkSizePower] + (linear_index & chunkMask) * collumn.sizeOfElement;
+  }
 };
 
 // return index of the added entity

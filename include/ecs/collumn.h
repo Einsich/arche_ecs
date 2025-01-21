@@ -1,6 +1,7 @@
 #pragma once
 #include "ecs/config.h"
 #include "ecs/archetype_chunk_size.h"
+#include "ecs/tiny_string.h"
 #include <numeric> // for lcm
 
 namespace ecs_details
@@ -8,47 +9,36 @@ namespace ecs_details
 
 struct Collumn
 {
-  std::string debugName;
   std::vector<char *> chunks;
-  size_t capacity;
-  size_t sizeOfElement;
-  size_t alignmentOfElement;
-  size_t chunkSize;
-  size_t chunkMask;
-  ecs::TypeId typeId;
-  ecs::ArchetypeChunkSize chunkSizePower;
-  std::align_val_t containerAlignment;
+  ecs_details::tiny_string debugName;
   ecs::ComponentId componentId;
-
+  uint32_t chunkSize;
+  uint32_t sizeOfElement;
+  ecs::TypeId typeId;
+  uint32_t containerAlignment;
   Collumn(ecs::ArchetypeChunkSize chunk_size_power, size_t size_of_element, size_t alignment_of_element, ecs::TypeId type_id) :
-    capacity(0),
-    sizeOfElement(size_of_element),
-    alignmentOfElement(alignment_of_element),
     chunkSize(1 << chunk_size_power),
-    chunkMask(chunkSize - 1),
+    sizeOfElement(size_of_element),
     typeId(type_id),
-    chunkSizePower(chunk_size_power),
-    containerAlignment(std::align_val_t{std::lcm(chunkSize, alignmentOfElement)})
+    containerAlignment(std::lcm(chunkSize, alignment_of_element))
   {}
 
   ~Collumn()
   {
     for (char *data : chunks)
     {
-      operator delete[] (data, chunkSize * sizeOfElement, containerAlignment);
+      operator delete[] (data, chunkSize * sizeOfElement, std::align_val_t{containerAlignment});
     }
   }
 
   void add_chunk()
   {
-    capacity += chunkSize;
-    chunks.push_back(new (containerAlignment) char[chunkSize * sizeOfElement]);
+    chunks.push_back(new (std::align_val_t{containerAlignment}) char[chunkSize * sizeOfElement]);
   }
 
-  char *get_data(uint32_t linear_index)
-  {
-    return chunks[linear_index >> chunkSizePower] + (linear_index & chunkMask) * sizeOfElement;
-  }
 };
+
+static_assert(sizeof(Collumn) == 56);
+static_assert(alignof(Collumn) == 8);
 
 } // namespace ecs

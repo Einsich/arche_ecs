@@ -128,6 +128,7 @@ static void query_iteration(ecs::EcsManager &mgr, ecs::NameHash query_hash, Call
     {
       ecs_details::Archetype &archetype = *archetypeRecord.archetype;
       const ecs::ToComponentMap &toComponentIndex = archetypeRecord.toComponentIndex;
+      ecs::mark_dirty(archetype, archetypeRecord.toTrackedComponent);
       query_archetype_iteration<N, CastArgs...>(archetype, toComponentIndex, std::move(query_function), std::make_index_sequence<N>());
     }
   }
@@ -158,6 +159,7 @@ static void query_invoke_for_entity(ecs::EcsManager &mgr, ecs::EntityId eid, ecs
         const ecs::ArchetypeRecord &archetypeRecord = ait->second;
         ecs_details::Archetype &archetype = *archetypeRecord.archetype;
         const ecs::ToComponentMap &toComponentIndex = archetypeRecord.toComponentIndex;
+        ecs::mark_dirty(archetype, archetypeRecord.toTrackedComponent, componentIdx);
         query_invoke_for_entity_impl<N, CastArgs...>(archetype, toComponentIndex, componentIdx, std::move(query_function), std::make_index_sequence<N>());
       }
     }

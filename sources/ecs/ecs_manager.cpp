@@ -10,7 +10,8 @@ ECS_TYPE_DECLARATION_ALIAS(ecs::EntityId, "EntityId")
 
 namespace ecs_details
 {
-  ecs::ArchetypeId get_or_create_archetype(ecs::EcsManager &mgr, ecs::InitializerList &components, ecs::ArchetypeChunkSize chunk_size_power, const char *template_name);
+  ecs::ArchetypeId get_or_create_archetype(ecs::EcsManager &mgr, ecs::InitializerList &components, const ecs::TrackedComponentMap &tracked_component_map, ecs::ArchetypeChunkSize chunk_size_power, const char *template_name);
+  void track_changes(ecs::EcsManager &mgr, ecs_details::Archetype &archetype);
 }
 
 namespace ecs
@@ -255,9 +256,28 @@ void perform_event_immediate(EcsManager &mgr, EventId event_id, const void *even
         EventHandler &handler = hndlIt->second;
         for (const auto &[archetypeId, archetypeRecord] : handler.archetypesCache)
         {
+          ecs::mark_dirty(*archetypeRecord.archetype, archetypeRecord.toTrackedComponent);
           handler.broadcastEvent(*archetypeRecord.archetype, archetypeRecord.toComponentIndex, event_id, event_ptr);
         }
       }
+    }
+  }
+}
+
+void perform_event_immediate(EcsManager &mgr, ArchetypeId archetypeId, uint32_t componentIdx, NameHash query_id, EventId event_id, const void *event_ptr)
+{
+  auto hndlIt = mgr.events.find(query_id);
+  if (hndlIt != mgr.events.end())
+  {
+    EventHandler &handler = hndlIt->second;
+    auto ait = handler.archetypesCache.find(archetypeId);
+    if (ait != handler.archetypesCache.end())
+    {
+      const auto &archetypeRecord = ait->second;
+      ecs_details::Archetype &archetype = *archetypeRecord.archetype;
+      const ecs::ToComponentMap &toComponentIndex = archetypeRecord.toComponentIndex;
+      ecs::mark_dirty(archetype, archetypeRecord.toTrackedComponent, componentIdx);
+      handler.unicastEvent(archetype, toComponentIndex, componentIdx, event_id, event_ptr);
     }
   }
 }
@@ -269,19 +289,7 @@ static void perform_event_immediate(EcsManager &mgr, ArchetypeId archetypeId, ui
   {
     for (NameHash queryId : it->second)
     {
-      auto hndlIt = mgr.events.find(queryId);
-      if (hndlIt != mgr.events.end())
-      {
-        EventHandler &handler = hndlIt->second;
-        auto ait = handler.archetypesCache.find(archetypeId);
-        if (ait != handler.archetypesCache.end())
-        {
-          const auto &archetypeRecord = ait->second;
-          ecs_details::Archetype &archetype = *archetypeRecord.archetype;
-          const ecs::ToComponentMap &toComponentIndex = archetypeRecord.toComponentIndex;
-          handler.unicastEvent(archetype, toComponentIndex, componentIdx, event_id, event_ptr);
-        }
-      }
+      perform_event_immediate(mgr, archetypeId, componentIdx, queryId, event_id, event_ptr);
     }
   }
 }
@@ -315,18 +323,25 @@ void perform_delayed_events(EcsManager &mgr)
 static TemplateId template_registration(
   EcsManager &mgr,
   ComponentId eid_component_id,
-  const char *_name,
-  const std::span<TemplateId> &parent_templates,
-  InitializerList &&components,
-  ArchetypeChunkSize chunk_size_power)
+  TemplateInit &&template_init,
+  const std::span<TemplateId> &parent_templates)
 {
+  const char *_name = template_init.name.c_str();
   TemplateId templateId = hash(_name);
   if (mgr.templates.find(templateId) != mgr.templates.end())
   {
     ECS_LOG_ERROR(mgr).log("Template \"%s\" already exists", _name);
     return templateId;
   }
-  components.push_back(ecs::ComponentInit{eid_component_id, ecs::EntityId()});
+  template_init.args.push_back(ecs::ComponentInit{eid_component_id, ecs::EntityId()});
+
+  TrackedComponentMap trackedComponents;
+  for (const ecs_details::tiny_string &trackedComponent : template_init.trackedComponents)
+  {
+    ecs::NameHash nameHash = hash(trackedComponent.c_str());
+    trackedComponents.insert(nameHash);
+  }
+
   for (TemplateId parent_template : parent_templates)
   {
     auto it = mgr.templates.find(parent_template);
@@ -336,35 +351,49 @@ static TemplateId template_registration(
       return templateId;
     }
     const Template &parentTemplate = it->second;
+    trackedComponents.insert(parentTemplate.trackedComponents.begin(), parentTemplate.trackedComponents.end());
     for (const auto &[componentId, componentInit] : parentTemplate.args.args)
     {
-      if (components.args.count(componentId) > 0)
+      if (template_init.args.args.count(componentId) > 0)
       {
         continue;
       }
       else
       {
-        components.push_back(componentInit.copy());
+        template_init.args.push_back(componentInit.copy());
       }
     }
   }
-  ArchetypeId archetypeId = ecs_details::get_or_create_archetype(mgr, components, chunk_size_power, _name);
+  ArchetypeId archetypeId = ecs_details::get_or_create_archetype(mgr, template_init.args, trackedComponents, template_init.chunkSizePower, _name);
 
-  Template templateRecord{ecs_details::tiny_string(_name), std::move(components), archetypeId, {}};
+  Template templateRecord{std::move(template_init.name), std::move(template_init.args), archetypeId, std::move(trackedComponents), {}};
 
   mgr.templates[templateId] = std::move(templateRecord);
 
   return templateId;
 }
 
+TemplateId template_registration(EcsManager &manager, TemplateInit &&template_init)
+{
+  return template_registration(manager, manager.eidComponentId, std::move(template_init), {});
+}
+
 TemplateId template_registration(EcsManager &manager, const char *_name, InitializerList &&components, ArchetypeChunkSize chunk_size_power)
 {
-  return template_registration(manager, manager.eidComponentId, _name, {}, std::move(components), chunk_size_power);
+  TemplateInit templateInit;
+  templateInit.name = _name;
+  templateInit.chunkSizePower = chunk_size_power;
+  templateInit.args = std::move(components);
+  return template_registration(manager, manager.eidComponentId, std::move(templateInit), {});
 }
 
 TemplateId template_registration(EcsManager &manager, const char *_name, TemplateId parent_template, InitializerList &&components, ArchetypeChunkSize chunk_size_power)
 {
-  return template_registration(manager, manager.eidComponentId, _name, {&parent_template, 1}, std::move(components), chunk_size_power);
+  TemplateInit templateInit;
+  templateInit.name = _name;
+  templateInit.chunkSizePower = chunk_size_power;
+  templateInit.args = std::move(components);
+  return template_registration(manager, manager.eidComponentId, std::move(templateInit), {&parent_template, 1});
 }
 
 void destroy_entities(EcsManager &mgr)
@@ -385,7 +414,8 @@ void destroy_entities(EcsManager &mgr)
   mgr.entityContainer.freeIndices.clear();
 }
 
-const void *get_component(EcsManager &mgr, EntityId eid, ComponentId componentId)
+template <typename T, bool checkTracking>
+static T get_component_impl(EcsManager &mgr, EntityId eid, ComponentId componentId)
 {
   ecs::ArchetypeId archetypeId;
   uint32_t componentIndex;
@@ -401,15 +431,28 @@ const void *get_component(EcsManager &mgr, EntityId eid, ComponentId componentId
     int collumnIdx = archetype.getComponentCollumnIndex(componentId);
     if (collumnIdx != -1)
     {
+      if constexpr (checkTracking)
+      {
+        int trackedCollumnIdx = archetype.getComponentTrackedCollumnIndex(componentId);
+        if (trackedCollumnIdx != -1)
+        {
+          archetype.trackedCollumns[trackedCollumnIdx].mark_dirty(componentIndex);
+        }
+      }
       return archetype.getData(archetype.collumns[collumnIdx], componentIndex);
     }
   }
   return nullptr;
 }
 
+const void *get_component(EcsManager &mgr, EntityId eid, ComponentId componentId)
+{
+  return get_component_impl<const void *, false>(mgr, eid, componentId);
+}
+
 void *get_rw_component(EcsManager &mgr, EntityId eid, ComponentId componentId)
 {
-  return const_cast<void *>(get_component(mgr, eid, componentId));
+  return get_component_impl<void *, true>(mgr, eid, componentId);
 }
 
 void init_singletons(EcsManager &mgr)
@@ -427,6 +470,15 @@ void init_singletons(EcsManager &mgr)
         ECS_LOG_ERROR(mgr).log("Singleton component %s has no default constructor", typeDecl.typeName.c_str());
       }
     }
+  }
+}
+
+
+void track_changes(ecs::EcsManager &mgr)
+{
+  for (auto &[id, archetype] : mgr.archetypeMap)
+  {
+    ecs_details::track_changes(mgr, *archetype);
   }
 }
 

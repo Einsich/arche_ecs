@@ -1,8 +1,8 @@
 ========================================
-1) on_appear, on_disappear events (done partially, depends on 3 punkt)
+1) on_appear, on_disappear events (done)
 2) systems ordering, before and after (done)
 3) add/remove templates/components
-4) track events
+4) track events (done)
 5) uncopyable component creation (for templates)
 6) singleton types (done)
 7) get/set component by eid (done, but depends on 4th punkt)

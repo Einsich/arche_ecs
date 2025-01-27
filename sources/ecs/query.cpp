@@ -1,5 +1,11 @@
 #include "ecs/query.h"
 #include "ecs/ecs_manager.h"
+#include <assert.h>
+
+namespace ecs_details
+{
+bool try_registrate_track(ecs::EcsManager &mgr, const std::vector<ecs::ComponentId> &tracked_components, ecs_details::Archetype &archetype, ecs::NameHash event_hash);
+}
 
 namespace ecs
 {
@@ -172,12 +178,25 @@ bool try_registrate(ecs::EcsManager &mgr, ecs::Query &query, const ecs_details::
 
   ToComponentMap toComponentIndex;
   toComponentIndex.reserve(query.querySignature.size());
+  std::vector<int> toTrackedComponentIndex;
+  toTrackedComponentIndex.reserve(query.querySignature.size());
+
+
   for (const Query::ComponentAccessInfo &componentAccessInfo : query.querySignature)
   {
     int componentIndex = archetype->getComponentCollumnIndex(componentAccessInfo.componentId);
     if (componentIndex != -1)
     {
       toComponentIndex.push_back((std::vector<char *> *)&(archetype->collumns[componentIndex].chunks));
+
+      if (componentAccessInfo.access == Query::ComponentAccess::READ_WRITE || componentAccessInfo.access == Query::ComponentAccess::READ_WRITE_OPTIONAL)
+      {
+        int trackedComponentIndex = archetype->getComponentTrackedCollumnIndex(componentAccessInfo.componentId);
+        if (trackedComponentIndex != -1)
+        {
+          toTrackedComponentIndex.push_back(trackedComponentIndex);
+        }
+      }
     }
     else
     {
@@ -197,10 +216,17 @@ bool try_registrate(ecs::EcsManager &mgr, ecs::Query &query, const ecs_details::
     }
   }
 
-  query.archetypesCache.insert({archetype->archetypeId, {(ecs_details::Archetype *)archetype, std::move(toComponentIndex)}});
+  query.archetypesCache.emplace(archetype->archetypeId,
+    ArchetypeRecord(
+      (ecs_details::Archetype *)archetype,
+      std::move(toComponentIndex),
+      std::move(toTrackedComponentIndex)
+    )
+  );
 
   return true;
 }
+
 
 void register_query(EcsManager &mgr, Query &&query)
 {
@@ -229,6 +255,15 @@ void register_event(EcsManager &mgr, EventHandler &&event)
   {
     try_registrate(mgr, event, archetype.get());
   }
+
+  if (!event.trackedComponents.empty())
+  {
+    for (auto &[id, archetype] : mgr.archetypeMap)
+    {
+      ecs_details::try_registrate_track(mgr, event.trackedComponents, *archetype, event.nameHash);
+    }
+  }
+
   ECS_LOG_INFO_VERBOSE(mgr).log("Register event %s", event.uniqueName.c_str());
   for (EventId eventId : event.eventIds)
   {
@@ -242,6 +277,22 @@ void perform_system(const System &system)
   for (const auto &[archetypeId, archetypeRecord] : system.archetypesCache)
   {
     system.update_archetype(*archetypeRecord.archetype, archetypeRecord.toComponentIndex);
+  }
+}
+
+void mark_dirty(ecs_details::Archetype &archetype, const std::vector<int> &to_tracked_component, uint32_t component_idx)
+{
+  for (int tracked_component_idx : to_tracked_component)
+  {
+    archetype.trackedCollumns[tracked_component_idx].mark_dirty(component_idx);
+  }
+}
+
+void mark_dirty(ecs_details::Archetype &archetype, const std::vector<int> &to_tracked_component)
+{
+  for (int tracked_component_idx : to_tracked_component)
+  {
+    archetype.trackedCollumns[tracked_component_idx].mark_dirty();
   }
 }
 

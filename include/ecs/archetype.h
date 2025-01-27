@@ -9,7 +9,7 @@
 namespace ecs_details
 {
 
-using ArchetypeComponentType = ska::flat_hash_set<ecs::ComponentId>;
+using ArchetypeComponentType = ska::flat_hash_map<ecs::ComponentId, bool /*tracked*/>;
 
 struct Archetype
 {
@@ -17,8 +17,12 @@ struct Archetype
   ecs::ArchetypeId archetypeId;
 
   std::vector<ecs_details::Collumn> collumns;
+  std::vector<ecs_details::TrackedCollumn> trackedCollumns;
+  using TrackedEvent = std::pair<ecs::NameHash, ecs_details::TrackMask>;
+  std::vector<TrackedEvent> trackedEvents;
 
-  ska::flat_hash_map<ecs::ComponentId, size_t> componentToCollumnIndex;
+  ska::flat_hash_map<ecs::ComponentId, int32_t> componentToCollumnIndex;
+  ska::flat_hash_map<ecs::ComponentId, int32_t> componentToTrackedCollumnIndex;
 
   uint32_t entityCount = 0;
   uint32_t chunkSize = 0;
@@ -36,7 +40,18 @@ struct Archetype
     return it != componentToCollumnIndex.end() ? it->second : -1;
   }
 
-  char *getData(ecs_details::Collumn &collumn, uint32_t linear_index)
+  int getComponentTrackedCollumnIndex(ecs::ComponentId componentId) const
+  {
+    auto it = componentToTrackedCollumnIndex.find(componentId);
+    return it != componentToTrackedCollumnIndex.end() ? it->second : -1;
+  }
+
+  char *getData(ecs_details::Collumn &collumn, uint32_t linear_index) const
+  {
+    return collumn.chunks[linear_index >> chunkSizePower] + (linear_index & chunkMask) * collumn.sizeOfElement;
+  }
+
+  const char *getData(const ecs_details::Collumn &collumn, uint32_t linear_index) const
   {
     return collumn.chunks[linear_index >> chunkSizePower] + (linear_index & chunkMask) * collumn.sizeOfElement;
   }

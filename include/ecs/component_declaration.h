@@ -32,6 +32,11 @@ inline constexpr TypeId get_type_id(ComponentId component_id)
   return uint32_t(component_id);
 }
 
+inline constexpr NameHash get_component_name_hash(ComponentId component_id)
+{
+  return component_id >> uint64_t(32);
+}
+
 
 struct EcsManager;
 

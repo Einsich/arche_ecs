@@ -1,8 +1,13 @@
 #include "ecs/archetype.h"
 #include "ecs/ecs_manager.h"
+#include "ecs/builtin_events.h"
 #include <assert.h>
 
+namespace ecs
+{
+void perform_event_immediate(EcsManager &mgr, ArchetypeId archetypeId, uint32_t componentIdx, NameHash query_id, EventId event_id, const void *event_ptr);
 
+}
 namespace ecs_details
 {
 
@@ -15,9 +20,10 @@ static const ecs::TypeDeclaration *find_type_declaration(const ecs::TypeDeclarat
 static ecs::ArchetypeId get_archetype_id(const ArchetypeComponentType &type)
 {
   uint32_t id = 0;
-  for (const ecs::ComponentId componentId : type)
+  for (const auto [componentId, tracked] : type)
   {
     id = ecs::fnv_hash(componentId, id);
+    id = ecs::fnv_hash((uint32_t)tracked, id);
   }
   return id;
 }
@@ -32,7 +38,7 @@ Archetype::Archetype(const ecs::EcsManager &mgr, ecs::ArchetypeId archetype_id, 
   assert(!type.empty());
   collumns.reserve(type.size());
   componentToCollumnIndex.reserve(type.size());
-  for (const ecs::ComponentId componentId : type)
+  for (const auto [componentId, isTracked] : type)
   {
     const ecs::TypeId typeId = ecs::get_type_id(componentId);
     const ecs::TypeDeclaration *typeDeclaration = find_type_declaration(mgr.typeMap, typeId);
@@ -41,11 +47,17 @@ Archetype::Archetype(const ecs::EcsManager &mgr, ecs::ArchetypeId archetype_id, 
       ECS_LOG_ERROR(mgr).log("Type with hash %x not found", typeId);
       continue;
     }
-    collumns.emplace_back(chunk_size_power, typeDeclaration->sizeOfElement, typeDeclaration->alignmentOfElement, typeId);
-    ecs_details::Collumn &collumn = collumns.back();
-    collumn.debugName = typeDeclaration->typeName.c_str();
-    collumn.componentId = componentId;
-    componentToCollumnIndex[componentId] = collumns.size() - 1;
+    uint32_t componentIndex = collumns.size();
+    collumns.emplace_back(chunk_size_power, typeDeclaration->sizeOfElement, typeDeclaration->alignmentOfElement, typeId, typeDeclaration->typeName.c_str(), componentId);
+
+    componentToCollumnIndex.emplace(componentId, componentIndex);
+
+    if (isTracked)
+    {
+      uint32_t trackedComponentIndex = componentToTrackedCollumnIndex.size();
+      componentToTrackedCollumnIndex.emplace(componentId, trackedComponentIndex);
+      trackedCollumns.emplace_back(chunk_size_power, typeDeclaration->sizeOfElement, typeDeclaration->alignmentOfElement, typeId, typeDeclaration->typeName.c_str(), componentId, componentIndex);
+    }
   }
 }
 
@@ -58,7 +70,11 @@ static void try_add_chunk(Archetype &archetype, int requiredEntityCount)
     for (ecs_details::Collumn &collumn : archetype.collumns)
     {
       collumn.add_chunk();
-      assert(archetype.capacity == collumn.capacity);
+    }
+    for (ecs_details::TrackedCollumn &trackedCollumn : archetype.trackedCollumns)
+    {
+      trackedCollumn.add_chunk();
+      trackedCollumn.dirtyState.resize(archetype.capacity, false);
     }
   }
 }
@@ -110,6 +126,16 @@ void add_entity_to_archetype(Archetype &archetype, ecs::EcsManager &mgr, const e
     // but this is error because we have to have initialization data for all components
     ECS_LOG_ERROR(mgr).log("No initialization data for component %s", collumn.debugName.c_str());
   }
+
+  for (ecs_details::TrackedCollumn &trackedCollumn : archetype.trackedCollumns)
+  {
+    const ecs_details::Collumn &collumn = archetype.collumns[trackedCollumn.collumnIdx];
+    const ecs::TypeDeclaration *typeDeclaration = find_type_declaration(mgr.typeMap, collumn.typeId);
+    const void *srcData = archetype.getData(collumn, archetype.entityCount);
+    void *trackedData = archetype.getData(trackedCollumn, archetype.entityCount);
+    typeDeclaration->copy_construct(trackedData, srcData);
+  }
+
   archetype.entityCount++;
   ecs_details::consume_init_list(mgr, std::move(override_list));
 }
@@ -163,37 +189,103 @@ void add_entities_to_archetype(Archetype &archetype, ecs::EcsManager &mgr, const
     // but this is error because we have to have initialization data for all components
     ECS_LOG_ERROR(mgr).log("No initialization data for component %s", collumn.debugName.c_str());
   }
+
+  for (ecs_details::TrackedCollumn &trackedCollumn : archetype.trackedCollumns)
+  {
+    const ecs_details::Collumn &collumn = archetype.collumns[trackedCollumn.collumnIdx];
+    const ecs::TypeDeclaration *typeDeclaration = find_type_declaration(mgr.typeMap, collumn.typeId);
+
+    for (int i = 0; i < requiredEntityCount; i++)
+    {
+      const void *srcData = archetype.getData(collumn, archetype.entityCount + i);
+      void *trackedData = archetype.getData(trackedCollumn, archetype.entityCount + i);
+      typeDeclaration->copy_construct(trackedData, srcData);
+    }
+  }
+
   archetype.entityCount += requiredEntityCount;
+}
+
+static void remove_entity_from_archetype_collumn(Archetype &archetype, ecs_details::Collumn &collumn, const ecs::TypeDeclarationMap &type_map, uint32_t entityIndex)
+{
+  const ecs::TypeDeclaration *typeDeclaration = find_type_declaration(type_map, collumn.typeId);
+  void *removedEntityComponentPtr = archetype.getData(collumn, entityIndex);
+  typeDeclaration->destruct(removedEntityComponentPtr);
+  if (entityIndex != archetype.entityCount - 1)
+  {
+    void *lastEntityComponentPtr = archetype.getData(collumn, archetype.entityCount - 1);
+    typeDeclaration->move_construct(removedEntityComponentPtr, lastEntityComponentPtr);
+  }
 }
 
 void remove_entity_from_archetype(Archetype &archetype, const ecs::TypeDeclarationMap &type_map, uint32_t entityIndex)
 {
   for (ecs_details::Collumn &collumn : archetype.collumns)
   {
-    const ecs::TypeDeclaration *typeDeclaration = find_type_declaration(type_map, collumn.typeId);
-    void *removedEntityComponentPtr = archetype.getData(collumn, entityIndex);
-    typeDeclaration->destruct(removedEntityComponentPtr);
+    remove_entity_from_archetype_collumn(archetype, collumn, type_map, entityIndex);
+  }
+  for (ecs_details::TrackedCollumn &collumn : archetype.trackedCollumns)
+  {
+    remove_entity_from_archetype_collumn(archetype, collumn, type_map, entityIndex);
     if (entityIndex != archetype.entityCount - 1)
     {
-      void *lastEntityComponentPtr = archetype.getData(collumn, archetype.entityCount - 1);
-      typeDeclaration->move_construct(removedEntityComponentPtr, lastEntityComponentPtr);
+      const bool isDirty = collumn.dirtyState[archetype.entityCount - 1];
+      collumn.dirtyState[entityIndex] = isDirty;
     }
   }
   archetype.entityCount--;
+}
+
+static void destroy_all_entities_from_archetype_collumn(Archetype &archetype, ecs_details::Collumn &collumn, const ecs::TypeDeclarationMap &type_map)
+{
+  const ecs::TypeDeclaration *typeDeclaration = find_type_declaration(type_map, collumn.typeId);
+  for (uint32_t i = 0; i < archetype.entityCount; i++)
+  {
+    void *entityComponentPtr = archetype.getData(collumn, i);
+    typeDeclaration->destruct(entityComponentPtr);
+  }
 }
 
 void destroy_all_entities_from_archetype(Archetype &archetype, const ecs::TypeDeclarationMap &type_map)
 {
   for (ecs_details::Collumn &collumn : archetype.collumns)
   {
-    const ecs::TypeDeclaration *typeDeclaration = find_type_declaration(type_map, collumn.typeId);
-    for (uint32_t i = 0; i < archetype.entityCount; i++)
-    {
-      void *entityComponentPtr = archetype.getData(collumn, i);
-      typeDeclaration->destruct(entityComponentPtr);
-    }
+    destroy_all_entities_from_archetype_collumn(archetype, collumn, type_map);
+  }
+  for (ecs_details::TrackedCollumn &collumn : archetype.trackedCollumns)
+  {
+    destroy_all_entities_from_archetype_collumn(archetype, collumn, type_map);
   }
   archetype.entityCount = 0;
+}
+
+bool try_registrate_track(ecs::EcsManager &mgr, const std::vector<ecs::ComponentId> &tracked_components, ecs_details::Archetype &archetype, ecs::NameHash event_hash)
+{
+  ecs_details::TrackMask mask = 0u;
+  for (ecs::ComponentId componentId : tracked_components)
+  {
+    int componentIndex = archetype.getComponentTrackedCollumnIndex(componentId);
+    if (componentIndex != -1)
+    {
+      const ecs::TypeDeclaration *typeDeclaration = ecs_details::find_type_declaration(mgr.typeMap, ecs::get_type_id(componentId));
+      if (!typeDeclaration->compare_and_assign)
+      {
+        ECS_LOG_ERROR(mgr).log("Type %s has no compare_and_assign function, and can't be tracked", typeDeclaration->typeName.c_str());
+        continue;
+      }
+      assert(componentIndex < ecs_details::MAX_TRACKED_COMPONENTS);
+      mask |= 1u << componentIndex;
+    }
+  }
+  if (mask != 0u)
+  {
+    archetype.trackedEvents.push_back({event_hash, mask});
+    return true;
+  }
+  else
+  {
+    return false;
+  }
 }
 
 static void register_archetype(ecs::EcsManager &mgr, ecs_details::Archetype &&archetype)
@@ -210,11 +302,15 @@ static void register_archetype(ecs::EcsManager &mgr, ecs_details::Archetype &&ar
   for (auto &[id, query] : mgr.events)
   {
     try_registrate(mgr, query, archetypePtr.get());
+    if (!query.trackedComponents.empty())
+    {
+      ecs_details::try_registrate_track(mgr, query.trackedComponents, *archetypePtr, query.nameHash);
+    }
   }
   mgr.archetypeMap[archetype.archetypeId] = std::move(archetypePtr);
 }
 
-ecs::ArchetypeId get_or_create_archetype(ecs::EcsManager &mgr, ecs::InitializerList &components, ecs::ArchetypeChunkSize chunk_size_power, const char *template_name)
+ecs::ArchetypeId get_or_create_archetype(ecs::EcsManager &mgr, ecs::InitializerList &components, const ecs::TrackedComponentMap &tracked_component_map, ecs::ArchetypeChunkSize chunk_size_power, const char *template_name)
 {
   ArchetypeComponentType type;
   type.reserve(components.size());
@@ -227,7 +323,8 @@ ecs::ArchetypeId get_or_create_archetype(ecs::EcsManager &mgr, ecs::InitializerL
     {
       if (cmpIt->second->typeId == arg.second.typeId)
       {
-        type.insert(arg.first);
+        const bool isTracked = tracked_component_map.find(ecs::get_component_name_hash(arg.first)) != tracked_component_map.end();
+        type.emplace(arg.first, isTracked);
         ++it;
         continue;
       }
@@ -260,5 +357,59 @@ ecs::ArchetypeId get_or_create_archetype(ecs::EcsManager &mgr, ecs::InitializerL
   return archetypeId;
 }
 
+
+void track_changes(ecs::EcsManager &mgr, ecs_details::Archetype &archetype)
+{
+  if (archetype.trackedEvents.empty() || archetype.trackedCollumns.empty())
+    return;
+
+  std::vector<TrackMask> trackMaskPerEntity;
+  trackMaskPerEntity.reserve(archetype.entityCount);
+  for (uint32_t i = 0; i < archetype.entityCount; i++)
+  {
+    ecs_details::TrackMask entityMask = 0u;
+
+    for (uint32_t j = 0, n = archetype.trackedCollumns.size(); j < n; j++)
+    {
+      ecs_details::TrackedCollumn &trackedCollumn = archetype.trackedCollumns[j];
+      if (trackedCollumn.dirtyFlags == ecs_details::TrackedCollumn::CLEAN)
+        continue;
+      const ecs_details::Collumn &collumn = archetype.collumns[trackedCollumn.collumnIdx];
+
+      const ecs::TypeDeclaration *typeDeclaration = find_type_declaration(mgr.typeMap, collumn.typeId);
+      assert(typeDeclaration->compare_and_assign != nullptr);
+      const char *newComponentPtr = archetype.getData(collumn, i);
+      char *oldComponentPtr = archetype.getData(trackedCollumn, i);
+      bool changed = typeDeclaration->compare_and_assign(newComponentPtr, oldComponentPtr);
+      if (changed)
+      {
+        assert(j < ecs_details::MAX_TRACKED_COMPONENTS);
+        entityMask |= 1u << j;
+      }
+    }
+    trackMaskPerEntity.emplace_back(entityMask);
+  }
+
+  for (ecs_details::TrackedCollumn &trackedCollumn : archetype.trackedCollumns)
+  {
+    trackedCollumn.reset_dirty();
+  }
+
+  const ecs::OnTrack event;
+  for (uint32_t i = 0, n = trackMaskPerEntity.size(); i < n; i++)
+  {
+    ecs_details::TrackMask entityMask = trackMaskPerEntity[i];
+    if (entityMask != 0u)
+    {
+      for (const auto &[event_hash, mask] : archetype.trackedEvents)
+      {
+        if ((entityMask & mask) != 0u)
+        {
+          ecs::perform_event_immediate(mgr, archetype.archetypeId, i, event_hash, ecs::EventInfo<ecs::OnTrack>::eventId, &event);
+        }
+      }
+    }
+  }
+}
 
 } // namespace ecs

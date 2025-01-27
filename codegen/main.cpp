@@ -68,7 +68,7 @@ struct FileInfo
 struct ParserSystemDescription
 {
   std::string sys_file, sys_name, unique_name;
-  std::vector<ParserFunctionArgument> args, req_args, req_not_args;
+  std::vector<ParserFunctionArgument> args, req_args, req_not_args, track_args;
   std::vector<std::string> before, after, tags, on_event;
   std::string stage;
   std::string isJob;
@@ -295,6 +295,11 @@ void parse_definition(Match &str, ParserSystemDescription &parserDescr)
         {
           for (uint i = 1; i < args0.size(); i++)
             parserDescr.on_event.emplace_back(args0[i].get());
+        }
+        else if (key == "track")
+        {
+          for (uint i = 1; i < args0.size(); i++)
+            parserDescr.track_args.emplace_back(clear_arg(args0[i].get()));
         }
         else if (key == "job")
         {
@@ -704,6 +709,13 @@ void register_events(std::ofstream &outFile, const std::vector<ParserSystemDescr
           "    query.broadcastEvent = %s_broadcast_event;\n"
           "    query.unicastEvent = %s_unicast_event;\n",
           name, name, event_type);
+
+    if (!query.track_args.empty())
+    {
+      write(outFile,
+          "    query.trackedComponents =\n");
+      fill_required_arguments(outFile, query.track_args);
+    }
     if (isAbstractEvent)
     {
       write(outFile,

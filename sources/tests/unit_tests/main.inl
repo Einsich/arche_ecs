@@ -67,6 +67,11 @@ appear_disapper_event(const ecs::Event &event, const std::string &name, const in
     printf("appear_disapper_event OnDisappear [%s] %d\n", name.c_str(), health ? *health : -1);
 }
 
+ECS_EVENT(track=int health)
+health_changed(const ecs::Event &, const std::string &name, int health)
+{
+  printf("health_changed [%s] %d\n", name.c_str(), health);
+}
 struct UpdateEvent
 {
 
@@ -174,13 +179,17 @@ int main()
       {nameId, std::string{}}
     }}, ecs::ArchetypeChunkSize::Dozens);
 
-  ecs::TemplateId template3 = template_registration(mgr, "named_alive_point",
-    {mgr, {
-      {velocityId, float3{}},
-      {positionId, float3{}},
-      {nameId, std::string{}},
-      {healthId, 0}
-    }}, ecs::ArchetypeChunkSize::Dozens);
+  ecs::TemplateInit templateInit;
+  templateInit.name = "named_alive_point";
+  templateInit.chunkSizePower = ecs::ArchetypeChunkSize::Dozens;
+  templateInit.args = {mgr, {
+    {velocityId, float3{}},
+    {positionId, float3{}},
+    {nameId, std::string{}},
+    {healthId, 0}
+  }};
+  templateInit.trackedComponents = {"health"};
+  ecs::TemplateId template3 = template_registration(mgr, std::move(templateInit));
 
   for (const auto &[id, archetype] : mgr.archetypeMap)
   {
@@ -403,6 +412,13 @@ int main()
   ecs::send_event(mgr, HeavyEvent{heavyEvent});
   ecs::send_event(mgr, HeavyEvent{data});
   ecs::perform_delayed_events(mgr);
+
+  for (ecs::EntityId eid : allEids)
+  {
+    ecs::set_component<int>(mgr, eid, "health", 25);
+  }
+
+  ecs::track_changes(mgr);
 
   ecs::destroy_entities(mgr);
 

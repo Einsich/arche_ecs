@@ -26,7 +26,11 @@ void destroy_entity(EcsManager &mgr, ecs::EntityId eid);
 
 void destroy_entities(EcsManager &mgr);
 
+void track_changes(ecs::EcsManager &mgr);
+
 void perform_delayed_entities_creation(EcsManager &mgr);
+
+TemplateId template_registration(EcsManager &manager, TemplateInit &&template_init);
 
 TemplateId template_registration(EcsManager &manager, const char *_name, InitializerList &&components, ArchetypeChunkSize chunk_size_power = ArchetypeChunkSize::Thousands);
 

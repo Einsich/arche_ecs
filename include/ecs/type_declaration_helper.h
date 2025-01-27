@@ -28,6 +28,28 @@ void move_construct(void *dest, void *src)
   new (dest) T(std::move(*(T *)src));
 }
 
+// return true if value changed
+template <typename T>
+bool compare_and_assign(const void *new_value, void *old_value)
+{
+  const T *new_ = (const T *)new_value;
+  T *old = (T *)old_value;
+  if (*old == *new_)
+    return false;
+  *old = *new_;
+  return true;
+}
+// Helper trait to check if T supports operator==
+template <typename T, typename = void>
+struct is_equality_comparable : std::false_type {};
+
+template <typename T>
+struct is_equality_comparable<T, std::void_t<decltype(std::declval<T>() == std::declval<T>())>> : std::true_type {};
+
+// Convenience variable template
+template <typename T>
+constexpr bool is_equality_comparable_v = is_equality_comparable<T>::value;
+
 } // namespace ecs_details
 
 namespace ecs
@@ -49,6 +71,8 @@ TypeDeclaration create_type_declaration()
     type_declaration.copy_construct = ecs_details::copy_construct<T>;
   if constexpr (std::is_move_constructible_v<T>)
     type_declaration.move_construct = ecs_details::move_construct<T>;
+  if constexpr (std::is_copy_constructible_v<T> && ecs_details::is_equality_comparable_v<T>)
+    type_declaration.compare_and_assign = ecs_details::compare_and_assign<T>;
   return type_declaration;
 }
 

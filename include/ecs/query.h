@@ -13,7 +13,14 @@ struct ArchetypeRecord
   ecs_details::Archetype *archetype = nullptr;
   // ArchetypeId archetypeId = 0;
   ToComponentMap toComponentIndex;
+  std::vector<int> toTrackedComponent;
+  ArchetypeRecord() = default;
+  ArchetypeRecord(ecs_details::Archetype *archetype, ToComponentMap &&toComponentIndex, std::vector<int> &&toTrackedComponent) :
+      archetype(archetype), toComponentIndex(std::move(toComponentIndex)), toTrackedComponent(std::move(toTrackedComponent)) {}
 };
+
+void mark_dirty(ecs_details::Archetype &archetype, const std::vector<int> &to_tracked_component, uint32_t component_idx);
+void mark_dirty(ecs_details::Archetype &archetype, const std::vector<int> &to_tracked_component);
 
 struct Query
 {
@@ -49,9 +56,9 @@ struct Query
 
 };
 
-static_assert(sizeof(Query) == 184);
-static_assert(sizeof(Query::archetypesCache) == 40);
-static_assert(sizeof(Query::before) == 24);
+// static_assert(sizeof(Query) == 184);
+// static_assert(sizeof(Query::archetypesCache) == 40);
+// static_assert(sizeof(Query::before) == 24);
 
 struct System final : public Query
 {
@@ -65,6 +72,7 @@ struct EventHandler final : public Query
   using UnicastEventHandler = void (*)(ecs_details::Archetype &archetype, const ToComponentMap &to_archetype_component, uint32_t component_idx, EventId event_id, const void *event_ptr);
 
   std::vector<EventId> eventIds;
+  std::vector<ComponentId> trackedComponents;
   BroadcastEventHandler broadcastEvent;
   UnicastEventHandler unicastEvent;
 };

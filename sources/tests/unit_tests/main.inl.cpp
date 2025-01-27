@@ -84,6 +84,20 @@ static void appear_disapper_event_unicast_event(ecs_details::Archetype &archetyp
   ecs_details::event_invoke_for_entity<N, ecs_details::Ptr<const std::string>, ecs_details::PrtWrapper<const int>>(archetype, to_archetype_component, component_idx, ecs::Event(event_id, event_ptr), appear_disapper_event, std::make_index_sequence<N>());
 }
 
+static void health_changed_broadcast_event(ecs_details::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component, ecs::EventId event_id, const void *event_ptr)
+{
+  ECS_UNUSED(event_id);
+  const int N = 2;
+  ecs_details::event_archetype_iteration<N, ecs_details::Ptr<const std::string>, ecs_details::Ptr<int>>(archetype, to_archetype_component, ecs::Event(event_id, event_ptr), health_changed, std::make_index_sequence<N>());
+}
+
+static void health_changed_unicast_event(ecs_details::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component, uint32_t component_idx, ecs::EventId event_id, const void *event_ptr)
+{
+  ECS_UNUSED(event_id);
+  const int N = 2;
+  ecs_details::event_invoke_for_entity<N, ecs_details::Ptr<const std::string>, ecs_details::Ptr<int>>(archetype, to_archetype_component, component_idx, ecs::Event(event_id, event_ptr), health_changed, std::make_index_sequence<N>());
+}
+
 static void update_event_broadcast_event(ecs_details::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component, ecs::EventId event_id, const void *event_ptr)
 {
   ECS_UNUSED(event_id);
@@ -192,7 +206,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
   {
     ecs::System query;
     query.name = "update_with_singleton";
-    query.uniqueName = "sources/tests/unit_tests/main.inl:113[update_with_singleton]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:118[update_with_singleton]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
@@ -260,8 +274,27 @@ static void ecs_registration(ecs::EcsManager &mgr)
   }
   {
     ecs::EventHandler query;
+    query.name = "health_changed";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:70[health_changed]";
+    query.nameHash = ecs::hash(query.uniqueName.c_str());
+    query.querySignature =
+    {
+      {ecs::get_component_id(ecs::TypeInfo<std::string>::typeId, "name"), ecs::Query::ComponentAccess::READ_ONLY},
+      {ecs::get_component_id(ecs::TypeInfo<int>::typeId, "health"), ecs::Query::ComponentAccess::READ_COPY}
+    };
+    query.broadcastEvent = health_changed_broadcast_event;
+    query.unicastEvent = health_changed_unicast_event;
+    query.trackedComponents =
+    {
+      ecs::get_component_id(ecs::TypeInfo<int>::typeId, "health")
+    };
+    query.eventIds = {};
+    ecs::register_event(mgr, std::move(query));
+  }
+  {
+    ecs::EventHandler query;
     query.name = "update_event";
-    query.uniqueName = "sources/tests/unit_tests/main.inl:84[update_event]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:89[update_event]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
@@ -277,7 +310,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
   {
     ecs::EventHandler query;
     query.name = "heavy_event";
-    query.uniqueName = "sources/tests/unit_tests/main.inl:89[heavy_event]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:94[heavy_event]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
@@ -291,7 +324,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
   {
     ecs::EventHandler query;
     query.name = "multi_event";
-    query.uniqueName = "sources/tests/unit_tests/main.inl:96[multi_event]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:101[multi_event]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {

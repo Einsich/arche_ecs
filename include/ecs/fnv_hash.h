@@ -3,9 +3,14 @@
 
 namespace ecs
 {
+  constexpr uint32_t fnv_hash(uint32_t a, uint32_t h)
+  {
+    return (h * 16777619u) ^ a;
+  }
+
   constexpr uint32_t fnv_hash(uint64_t a, uint32_t h)
   {
-    h = (h * 16777619u) ^ (a &0xFFFFFFFF);
+    h = (h * 16777619u) ^ (a & 0xFFFFFFFF);
     h = (h * 16777619u) ^ (a >> 32);
     return h;
   }

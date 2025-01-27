@@ -20,6 +20,7 @@
 
 // attributes:
 // on_event - list of events that system will be subscribed to
+// track - list of components to track changes
 #define ECS_EVENT(...) static void
 
 #define ECS_REQUEST(...) static void

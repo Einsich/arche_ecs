@@ -63,6 +63,7 @@ struct Query
 struct System final : public Query
 {
   using SystemUpdateHandler = void (*)(ecs_details::Archetype &archetype, const ToComponentMap &to_archetype_component);
+  ecs_details::tiny_string stage;
   SystemUpdateHandler update_archetype;
 };
 

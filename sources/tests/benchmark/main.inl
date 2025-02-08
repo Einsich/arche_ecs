@@ -444,11 +444,14 @@ ECS_TYPE_REGISTRATION(std::string)
 
 static ecs::System *find_system_by_name(ecs::EcsManager &mgr, const char *name)
 {
-  for (auto &system : mgr.systems)
+  for (auto &[id, systems] : mgr.systems)
   {
-    if (system.name == name)
+    for (auto &system : systems)
     {
-      return &system;
+      if (system.name == name)
+      {
+        return &system;
+      }
     }
   }
   return nullptr;

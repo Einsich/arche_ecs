@@ -12,17 +12,21 @@ namespace ecs_details
       char *str = nullptr;
     public:
       tiny_string() = default;
-      tiny_string(const char *str) : str(strdup(str)) {}
+      tiny_string(const char *_str) : str(_str ? strdup(_str) : nullptr) {}
       tiny_string(const tiny_string &other) : str(other.str ? strdup(other.str) : nullptr) {}
       tiny_string(tiny_string &&other) : str(other.str) { other.str = nullptr; }
       ~tiny_string() { if (str) free(str); }
       tiny_string &operator=(const tiny_string &other) { if (str) free(str); str = other.str ? strdup(other.str) : nullptr; return *this; }
       tiny_string &operator=(tiny_string &&other) { if (str) free(str); str = other.str; other.str = nullptr; return *this; }
-      const char *c_str() const { return str; }
+      const char *c_str() const { return str ? str : ""; }
       // size actually call strlen, there is no cached size
       size_t size() const { return str ? strlen(str) : 0; }
 
-      bool operator==(const tiny_string &other) const { return strcmp(str, other.str) == 0; }
+      bool operator==(const tiny_string &other) const
+      {
+        // take into account that str can be nullptr
+        return strcmp(c_str(), other.c_str()) == 0;
+      }
   };
 }
 namespace std

@@ -30,6 +30,10 @@ void track_changes(ecs::EcsManager &mgr);
 
 void perform_delayed_entities_creation(EcsManager &mgr);
 
+void perform_stage(EcsManager &mgr, const char *stage);
+
+void perform_stages(EcsManager &mgr);
+
 TemplateId template_registration(EcsManager &manager, TemplateInit &&template_init);
 
 TemplateId template_registration(EcsManager &manager, const char *_name, InitializerList &&components, ArchetypeChunkSize chunk_size_power = ArchetypeChunkSize::Thousands);

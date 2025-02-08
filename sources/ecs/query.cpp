@@ -146,9 +146,10 @@ void apply_reorder(std::vector<T> &vec, const std::vector<uint32_t> &order)
 
 void sort_systems(EcsManager &mgr)
 {
+  for (auto &[id, systems] : mgr.systems)
   {
-    std::vector<uint32_t> rightOrder = topological_sort(mgr, mgr.systems.size(), [&](uint32_t idx) { return &mgr.systems[idx]; });
-    apply_reorder(mgr.systems, rightOrder);
+    std::vector<uint32_t> rightOrder = topological_sort(mgr, systems.size(), [&](uint32_t idx) { return &systems[idx]; });
+    apply_reorder(systems, rightOrder);
   }
 
   for (auto &[id, events] : mgr.eventIdToHandlers)
@@ -245,7 +246,8 @@ void register_system(EcsManager &mgr, System &&system)
     try_registrate(mgr, system, archetype.get());
   }
   ECS_LOG_INFO_VERBOSE(mgr).log("Register system %s", system.uniqueName.c_str());
-  mgr.systems.push_back(std::move(system));
+  ecs::NameHash stageHash = ecs::hash(system.stage.c_str());
+  mgr.systems[stageHash].push_back(std::move(system));
 }
 
 
@@ -296,4 +298,28 @@ void mark_dirty(ecs_details::Archetype &archetype, const std::vector<int> &to_tr
   }
 }
 
+void perform_stage(EcsManager &mgr, const char *stage)
+{
+  ecs::NameHash stageHash = ecs::hash(stage);
+  auto it = mgr.systems.find(stageHash);
+  if (it != mgr.systems.end())
+  {
+    for (System &system : it->second)
+    {
+      perform_system(system);
+    }
+  }
 }
+
+void perform_stages(EcsManager &mgr)
+{
+  for (auto &[id, systems] : mgr.systems)
+  {
+    for (System &system : systems)
+    {
+      perform_system(system);
+    }
+  }
+}
+
+} // namespace ecs

@@ -52,7 +52,7 @@ struct EcsManager
   ComponentDeclarationMap componentMap;
   ArchetypeMap archetypeMap;
   ska::flat_hash_map<NameHash, Query> queries;
-  std::vector<System> systems;
+  ska::flat_hash_map<NameHash, std::vector<System>> systems;
   ska::flat_hash_map<NameHash, EventHandler> events;
   ska::flat_hash_map<EventId, std::vector<NameHash>> eventIdToHandlers;
   std::vector<DelayedEvent> delayedEvents;

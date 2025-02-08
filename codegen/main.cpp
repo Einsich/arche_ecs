@@ -685,6 +685,10 @@ void register_systems(std::ofstream &outFile, const std::vector<ParserSystemDesc
     write(outFile,
           "    query.update_archetype = %s_implementation;\n",
           name);
+    if (!query.stage.empty())
+      write(outFile,
+          "    query.stage = \"%s\";\n",
+          query.stage.c_str());
     // write(outFile, "  \"%s\",\n", query.stage.c_str());
     fill_string_array(outFile, "    query.before = {", query.before);
     fill_string_array(outFile, "    query.after = {", query.after);

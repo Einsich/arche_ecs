@@ -16,6 +16,11 @@ ECS_TYPE_REGISTRATION(int)
 ECS_TYPE_REGISTRATION(float3)
 ECS_TYPE_REGISTRATION(std::string)
 
+ECS_SYSTEM(require=std::string name; require_not=int health; stage=editor_act)
+editor_update(ecs::EntityId eid, float3 &position, const float3 &velocity)
+{
+  printf("editor_update [%d/%d] (%f %f %f), (%f %f %f)\n", eid.entityIndex, eid.generation, position.x, position.y, position.z, velocity.x, velocity.y, velocity.z);
+}
 
 ECS_SYSTEM(require=std::string name; require_not=int health)
 update(ecs::EntityId eid, float3 &position, const float3 &velocity)
@@ -370,10 +375,8 @@ int main()
 
   // assert(mgr.destroy_entity(eid1));
 
-  for (auto &system : mgr.systems)
-  {
-    ecs::perform_system(system);
-  }
+  ecs::perform_stage(mgr, "");
+  ecs::perform_stage(mgr, "editor_act");
   query_test(mgr);
 
   std::vector<ecs::EntityId> allEids;

@@ -295,9 +295,12 @@ static void register_archetype(ecs::EcsManager &mgr, ecs_details::Archetype &&ar
   {
     try_registrate(mgr, query, archetypePtr.get());
   }
-  for (auto &query : mgr.systems)
+  for (auto &[id, systems] : mgr.systems)
   {
-    try_registrate(mgr, query, archetypePtr.get());
+    for (auto &query : systems)
+    {
+      try_registrate(mgr, query, archetypePtr.get());
+    }
   }
   for (auto &[id, query] : mgr.events)
   {

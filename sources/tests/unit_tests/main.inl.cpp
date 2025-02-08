@@ -11,7 +11,7 @@ static void print_name_by_eid_query(ecs::EcsManager &mgr, ecs::EntityId eid, Cal
 template<typename Callable>
 static void print_name_query(ecs::EcsManager &mgr, Callable &&query_function)
 {
-  constexpr ecs::NameHash queryHash = ecs::hash("sources/tests/unit_tests/main.inl:34[print_name_query]");
+  constexpr ecs::NameHash queryHash = ecs::hash("sources/tests/unit_tests/main.inl:39[print_name_query]");
   const int N = 2;
   ecs_details::query_iteration<N, ecs_details::Ptr<const std::string>, ecs_details::PrtWrapper<int>>(mgr, queryHash, std::move(query_function));
 }
@@ -19,9 +19,15 @@ static void print_name_query(ecs::EcsManager &mgr, Callable &&query_function)
 template<typename Callable>
 static void print_name_by_eid_query(ecs::EcsManager &mgr, ecs::EntityId eid, Callable &&query_function)
 {
-  constexpr ecs::NameHash queryHash = ecs::hash("sources/tests/unit_tests/main.inl:44[print_name_by_eid_query]");
+  constexpr ecs::NameHash queryHash = ecs::hash("sources/tests/unit_tests/main.inl:49[print_name_by_eid_query]");
   const int N = 2;
   ecs_details::query_invoke_for_entity<N, ecs_details::Ptr<const std::string>, ecs_details::PrtWrapper<int>>(mgr, eid, queryHash, std::move(query_function));
+}
+
+static void editor_update_implementation(ecs_details::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)
+{
+  const int N = 3;
+  ecs_details::query_archetype_iteration<N, ecs_details::Ptr<ecs::EntityId>, ecs_details::Ptr<float3>, ecs_details::Ptr<const float3>>(archetype, to_archetype_component, editor_update, std::make_index_sequence<N>());
 }
 
 static void update_implementation(ecs_details::Archetype &archetype, const ecs::ToComponentMap &to_archetype_component)
@@ -146,7 +152,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
   {
     ecs::Query query;
     query.name = "print_name_query";
-    query.uniqueName = "sources/tests/unit_tests/main.inl:34[print_name_query]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:39[print_name_query]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
@@ -158,7 +164,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
   {
     ecs::Query query;
     query.name = "print_name_by_eid_query";
-    query.uniqueName = "sources/tests/unit_tests/main.inl:44[print_name_by_eid_query]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:49[print_name_by_eid_query]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
@@ -169,8 +175,31 @@ static void ecs_registration(ecs::EcsManager &mgr)
   }
   {
     ecs::System query;
+    query.name = "editor_update";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:19[editor_update]";
+    query.nameHash = ecs::hash(query.uniqueName.c_str());
+    query.querySignature =
+    {
+      {ecs::get_component_id(ecs::TypeInfo<ecs::EntityId>::typeId, "eid"), ecs::Query::ComponentAccess::READ_COPY},
+      {ecs::get_component_id(ecs::TypeInfo<float3>::typeId, "position"), ecs::Query::ComponentAccess::READ_WRITE},
+      {ecs::get_component_id(ecs::TypeInfo<float3>::typeId, "velocity"), ecs::Query::ComponentAccess::READ_ONLY}
+    };
+    query.requireComponents =
+    {
+      ecs::get_component_id(ecs::TypeInfo<std::string>::typeId, "name")
+    };
+    query.excludeComponents =
+    {
+      ecs::get_component_id(ecs::TypeInfo<int>::typeId, "health")
+    };
+    query.update_archetype = editor_update_implementation;
+    query.stage = "editor_act";
+    ecs::register_system(mgr, std::move(query));
+  }
+  {
+    ecs::System query;
     query.name = "update";
-    query.uniqueName = "sources/tests/unit_tests/main.inl:20[update]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:25[update]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
@@ -192,7 +221,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
   {
     ecs::System query;
     query.name = "print_name";
-    query.uniqueName = "sources/tests/unit_tests/main.inl:27[print_name]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:32[print_name]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
@@ -206,7 +235,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
   {
     ecs::System query;
     query.name = "update_with_singleton";
-    query.uniqueName = "sources/tests/unit_tests/main.inl:118[update_with_singleton]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:123[update_with_singleton]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
@@ -227,7 +256,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
   {
     ecs::EventHandler query;
     query.name = "on_appear_event";
-    query.uniqueName = "sources/tests/unit_tests/main.inl:51[on_appear_event]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:56[on_appear_event]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
@@ -243,7 +272,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
   {
     ecs::EventHandler query;
     query.name = "on_disappear_event";
-    query.uniqueName = "sources/tests/unit_tests/main.inl:56[on_disappear_event]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:61[on_disappear_event]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
@@ -259,7 +288,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
   {
     ecs::EventHandler query;
     query.name = "appear_disapper_event";
-    query.uniqueName = "sources/tests/unit_tests/main.inl:61[appear_disapper_event]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:66[appear_disapper_event]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
@@ -275,7 +304,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
   {
     ecs::EventHandler query;
     query.name = "health_changed";
-    query.uniqueName = "sources/tests/unit_tests/main.inl:70[health_changed]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:75[health_changed]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
@@ -294,7 +323,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
   {
     ecs::EventHandler query;
     query.name = "update_event";
-    query.uniqueName = "sources/tests/unit_tests/main.inl:89[update_event]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:94[update_event]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
@@ -310,7 +339,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
   {
     ecs::EventHandler query;
     query.name = "heavy_event";
-    query.uniqueName = "sources/tests/unit_tests/main.inl:94[heavy_event]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:99[heavy_event]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {
@@ -324,7 +353,7 @@ static void ecs_registration(ecs::EcsManager &mgr)
   {
     ecs::EventHandler query;
     query.name = "multi_event";
-    query.uniqueName = "sources/tests/unit_tests/main.inl:101[multi_event]";
+    query.uniqueName = "sources/tests/unit_tests/main.inl:106[multi_event]";
     query.nameHash = ecs::hash(query.uniqueName.c_str());
     query.querySignature =
     {

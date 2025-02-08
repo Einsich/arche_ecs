@@ -97,15 +97,15 @@ namespace ecs
 
     template<typename ValueType>
     ComponentInit(ComponentId component_id, const ValueType&_data) :
-        ecs::Any(_data, ecs::TypeInfo<T>::typeId, component_id) {}
+        ecs::Any(_data, ecs::TypeInfo<ValueType>::typeId, component_id) {}
 
     template<typename ValueType>
     ComponentInit(const char *component_name, const ValueType &_data) :
-        ComponentInit(get_component_id(ecs::TypeInfo<T>::typeId, component_name), _data) {}
+        ComponentInit(get_component_id(ecs::TypeInfo<ValueType>::typeId, component_name), _data) {}
 
     template<typename ValueType>
     ComponentInit(EcsManager &manager, const char *component_name, const ValueType &_data) :
-        ComponentInit(get_or_add_component<T>(manager, component_name), _data) {}
+        ComponentInit(get_or_add_component<ValueType>(manager, component_name), _data) {}
 
 
     ComponentInit(ecs::Any &&_data) :
